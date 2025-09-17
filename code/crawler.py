@@ -4,8 +4,15 @@ from crawler.utils import crawl_all_subpage_list_pages, crawl_contentpage
 import yaml
 import pandas as pd
 import os
-
+import argparse
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--start_page", type=int, default=0)
+    parser.add_argument("--end_page", type=int, default=30)
+    args = parser.parse_args()
+    start_page = args.start_page
+    end_page = args.end_page
+    
     # Check whether the content_src_with_content.json exists
     if os.path.exists("./config/content_src.json"):
         with open("./config/content_src.json", "r", encoding="utf-8") as f:
@@ -31,6 +38,10 @@ if __name__ == '__main__':
     
     # Crawl content pages
     print(len(content_src))
-    data = asyncio.run(crawl_contentpage(content_src))
-    with open("../data/v0_html_content.json", "w", encoding="utf-8") as f:
+    print(f"start_page: {start_page}, end_page: {end_page}")
+    start_page = min(start_page, len(content_src))
+    end_page = min(end_page, len(content_src))
+    
+    data = asyncio.run(crawl_contentpage(content_src[start_page:end_page]))
+    with open(f"../data/v0_html_content_{start_page}_{end_page}.json", "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=4)
