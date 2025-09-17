@@ -5,6 +5,7 @@ from crawl4ai.extraction_strategy import JsonCssExtractionStrategy
 import json
 import re
 import asyncio
+from tqdm.asyncio import tqdm
 BASE_URL = "https://www.shmeea.edu.cn"
 
 # TODO
@@ -19,7 +20,7 @@ async def crawl_contentpage(content_list):
     content_list = [item for item in content_list if item['year'] in ['2023', '2024']]
     crawled_data = []
     batch_size = 5
-    for i in range(0, len(content_list), batch_size):
+    for i in tqdm(range(0, len(content_list), batch_size), desc="Batches"):
         batch = content_list[i:i + batch_size]
         tasks = [crawl_single_contentpage(item) for item in batch]
         results = await asyncio.gather(*tasks)
