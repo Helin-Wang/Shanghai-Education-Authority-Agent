@@ -6,7 +6,11 @@ import json
 import re
 import asyncio
 from tqdm.asyncio import tqdm
+from bs4 import BeautifulSoup
 BASE_URL = "https://www.shmeea.edu.cn"
+
+# TODO: Do not use css selector to crawl content, use html to crawl content; and then use beautifulsoup to extract <div class=trout-region-content/class=Article_content>
+
 
 # TODO
 # Current version: 
@@ -37,25 +41,11 @@ async def crawl_single_contentpage(content_src_item: dict, max_retries: int = 3,
         max_retries: Maximum number of retry attempts (default: 3)
         retry_delay: Delay between retries in seconds (default: 1.0)
     """
-    css_schema = {
-        "name": "Contentpage",
-        "baseSelector": "div.Article_content",
-        "fields": [
-            {
-                "name": "content",
-                "selector": "div",
-                "type": "html"
-            }
-        ]
-    }
-    css_strategy = JsonCssExtractionStrategy(schema=css_schema)
     cfg = CrawlerRunConfig(
         js_code="window.scrollTo(0, document.body.scrollHeight);",
         wait_for="body",
-        #markdown_generator=DefaultMarkdownGenerator(),
         page_timeout=30000,
-        verbose=True,
-        extraction_strategy=css_strategy
+        verbose=True
     )
     url = content_src_item['link']
     
@@ -66,11 +56,27 @@ async def crawl_single_contentpage(content_src_item: dict, max_retries: int = 3,
         try:
             async with AsyncWebCrawler(verbose=False) as crawler:
                 result = await crawler.arun(url=url, config=cfg)
-                if result.success and result.extracted_content:
-                    extracted_content = json.loads(result.extracted_content)
-                    content_src_item['content'] = extracted_content[0]['content']
-                    content_src_item['crawl_time'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    return content_src_item
+                if result.success:
+                    # Use BeautifulSoup to extract content based on URL domain
+                    soup = BeautifulSoup(result.html, 'html.parser')
+                    
+                    if 'edu.sh.gov.cn' in url:
+                        # Extract div with class trout-region-content
+                        content_div = soup.find('div', class_='trout-region-content')
+                    else:
+                        # Extract div with class Article_content
+                        content_div = soup.find('div', class_='Article_content')
+                    
+                    if content_div:
+                        content_src_item['content'] = str(content_div)
+                        content_src_item['crawl_time'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        return content_src_item
+                    else:
+                        print(f"⚠️ No content div found for {url}")
+                        # Fallback: save raw HTML for debugging
+                        content_src_item['content'] = result.html
+                        content_src_item['crawl_time'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        return content_src_item
                 else:
                     if attempt < max_retries:
                         print(f"⚠️ Attempt {attempt + 1} failed for {url}, retrying in {retry_delay}s...")
