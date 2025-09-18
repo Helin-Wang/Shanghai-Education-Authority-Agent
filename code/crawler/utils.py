@@ -10,6 +10,7 @@ from bs4 import BeautifulSoup
 from markitdown import MarkItDown
 import io
 from typing import List
+from tqdm import tqdm
 BASE_URL = "https://www.shmeea.edu.cn"
 
 # TODO: Do not use css selector to crawl content, use html to crawl content; and then use beautifulsoup to extract <div class=trout-region-content/class=Article_content>
@@ -248,7 +249,7 @@ def convert_html_to_markdown(html: str) -> str:
     return markdown_text
 
 def postprocess_content(data: List[dict]) -> List[dict]:
-    for item in data:
+    for item in tqdm(data, desc="Converting HTML to Markdown"):
         item['markdown'] = convert_html_to_markdown(item['content'])
     return data
     
