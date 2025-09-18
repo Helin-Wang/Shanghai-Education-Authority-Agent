@@ -7,6 +7,9 @@ import re
 import asyncio
 from tqdm.asyncio import tqdm
 from bs4 import BeautifulSoup
+from markitdown import MarkItDown
+import io
+from typing import List
 BASE_URL = "https://www.shmeea.edu.cn"
 
 # TODO: Do not use css selector to crawl content, use html to crawl content; and then use beautifulsoup to extract <div class=trout-region-content/class=Article_content>
@@ -196,3 +199,56 @@ def extract_year(crawled_item: dict):
     else:
         # If not found in title, extract from published date
         return crawled_item['published_date'][:4]
+
+CN_NUMS = "一二三四五六七八九十百千"
+def classify_heading_level(text: str) -> int | None:
+    s = text.strip()
+    
+    # Level 1: 一、
+    if re.match(rf'^([{CN_NUMS}]+、)', s):
+        return 1
+
+    # Level 2: （一）… / (一)… / 
+    if re.match(rf'^[（(][{CN_NUMS}]+[)）]', s):
+        return 2
+    
+    # Level 3: 1. / 1、 / （1） / (1)
+    if re.match(r'^[（(]?\d+[)）]?\s*[、.．)]\s*', s):
+        return 3
+
+    return None
+
+def promote_fake_headings(html: str) -> str:
+    soup = BeautifulSoup(html, "lxml")
+
+    for p in soup.find_all("p"):
+        text = p.get_text(separator="", strip=True).strip()
+        if not text:
+            continue
+        level = classify_heading_level(text)
+        if level:
+            # Replace <p> with <hN>
+            tag = soup.new_tag(f'h{min(level,6)}')
+            tag.string = text
+            p.replace_with(tag)
+            print(text)
+            print(level)
+
+    return str(soup)
+
+def convert_html_to_markdown(html: str) -> str:
+    promoted = promote_fake_headings(html)
+    html_bytes = promoted.encode('utf-8')
+    stream = io.BytesIO(html_bytes)
+
+    md = MarkItDown()
+    result = md.convert_stream(stream, file_extension=".html")
+
+    markdown_text = result.text_content
+    return markdown_text
+
+def postprocess_content(data: List[dict]) -> List[dict]:
+    for item in data:
+        item['markdown'] = convert_html_to_markdown(item['content'])
+    return data
+    
