@@ -209,13 +209,13 @@ def classify_heading_level(text: str) -> int | None:
     if re.match(rf'^([{CN_NUMS}]+、)', s):
         return 1
 
-    # Level 2: （一）… / (一)… / 
+    # Level 3: （一）… / (一)… / 
     if re.match(rf'^[（(][{CN_NUMS}]+[)）]', s):
-        return 2
-    
-    # Level 3: 1. / 1、 / （1） / (1)
-    if re.match(r'^[（(]?\d+[)）]?\s*[、.．)]\s*', s):
         return 3
+    
+    # Level 2: 1. / 1、 / （1） / (1)
+    if re.match(r'^[（(]?\d+[)）]?\s*[、.．)]\s*', s):
+        return 2
 
     return None
 
