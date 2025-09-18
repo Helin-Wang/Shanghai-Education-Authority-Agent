@@ -218,7 +218,7 @@ def classify_heading_level(text: str) -> int | None:
         return 3
     
     # Level 4: (1) / （1）
-    if re.match(r'^([（(]\d+[)）]|\d+)\s*', s):
+    if re.match(r'^([（(]\d+[）)])\s*', s):
         return 4
 
     return None
