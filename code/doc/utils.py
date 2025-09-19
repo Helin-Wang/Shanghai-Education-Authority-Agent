@@ -91,11 +91,10 @@ def stable_id(*parts: str, limit: int = 16) -> str:
     return h[:limit]
 
 def split_into_chunk(text: str, 
-                                max_chunk_size: int = 500, 
-                                min_chunk_size: int = 100,
-                                overlap_size: int = 50,
-                                section_id: str = "",
-                                preserve_sentences: bool = True) -> List[Chunk]:
+                    max_chunk_size: int = 500, 
+                    overlap_size: int = 50,
+                    section_id: str = "",
+                    preserve_sentences: bool = True) -> List[Chunk]:
     """
     Chunk markdown text with tables as atomic units.
     
@@ -134,20 +133,19 @@ def split_into_chunk(text: str,
         if end >= len(text):
             # Last chunk
             chunk_text = text[start:].strip()
-            if len(chunk_text) >= min_chunk_size:
                 # Check if this chunk contains a table
                 # TODO: modify table format
                 # contains_table = any(start <= table_start < len(text) and start <= table_end <= len(text) 
                 #                    for table_start, table_end in table_boundaries)
                 
-                chunks.append(Chunk(
-                    text=chunk_text,
-                    start_char=start,
-                    end_char=len(text),
-                    chunk_index=chunk_index,
-                    section_id=section_id,
-                    metadata={"chunk_type": "final", "length": len(chunk_text)}
-                ))
+            chunks.append(Chunk(
+                text=chunk_text,
+                start_char=start,
+                end_char=len(text),
+                chunk_index=chunk_index,
+                section_id=section_id,
+                metadata={"chunk_type": "final", "length": len(chunk_text)}
+            ))
             break
         
         # Check if we're about to split a table
@@ -173,7 +171,7 @@ def split_into_chunk(text: str,
                 best_break = end
                 
                 # Look for sentence endings in the last part of the chunk
-                search_start = max(start + min_chunk_size, end - 100)
+                search_start = max(start + 100, end - 100)
                 for i in range(end - 1, search_start - 1, -1):
                     if text[i] in sentence_endings:
                         best_break = i + 1
@@ -199,16 +197,15 @@ def split_into_chunk(text: str,
             #                    for table_start, table_end in table_boundaries)
         
         # Ensure minimum chunk size
-        if len(chunk_text) >= min_chunk_size:
-            chunks.append(Chunk(
-                text=chunk_text,
-                start_char=start,
-                end_char=end,
-                chunk_index=chunk_index,
-                section_id=section_id,
-                metadata={"chunk_type": "normal", "length": len(chunk_text)}
+        chunks.append(Chunk(
+            text=chunk_text,
+            start_char=start,
+            end_char=end,
+            chunk_index=chunk_index,
+            section_id=section_id,
+            metadata={"chunk_type": "normal", "length": len(chunk_text)}
             ))
-            chunk_index += 1
+        chunk_index += 1
         
         # Move start position with overlap
         start = max(start + 1, end - overlap_size)
@@ -264,7 +261,6 @@ def enrich_chunk_metadata(chunk: Chunk, section: Section,
 def parse_markdown(md_text: str, 
                    doc_metadata: Dict[str, Any] = None,
                    max_chunk_size: int = 500,
-                   min_chunk_size: int = 100,
                    overlap_size: int = 50,
                 chunk_sections: bool = True) -> Section:
     """
@@ -324,11 +320,12 @@ def parse_markdown(md_text: str,
     chunks = split_into_chunk(
         ''.join(lines[0:root.end_line]),
         max_chunk_size=max_chunk_size,
-        min_chunk_size=min_chunk_size,
         overlap_size=overlap_size,
         section_id=root.id,
         preserve_sentences=True
     )
+    print(''.join(lines[0:root.end_line]))
+    print(chunks)
     for chunk in chunks:
         chunk = enrich_chunk_metadata(chunk, root, doc_metadata)
         root.chunks.append(chunk)
@@ -361,7 +358,6 @@ def parse_markdown(md_text: str,
         chunks = split_into_chunk(
             processed_text,
             max_chunk_size=max_chunk_size,
-            min_chunk_size=min_chunk_size,
             overlap_size=overlap_size,
             section_id=section_id,
             preserve_sentences=True
