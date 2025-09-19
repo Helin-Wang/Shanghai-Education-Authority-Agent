@@ -36,3 +36,12 @@ def section_to_dict(root: Section) -> Dict[str, Any]:
 def chunk_to_dict(chunk: Chunk) -> Dict[str, Any]:
     d = asdict(chunk)
     return d
+
+def all_chunks_in_tree(root: Section) -> List[Chunk]:
+    chunks = []
+    # chunks in current section
+    chunks.extend(root.chunks)
+    # chunks in children sections
+    for child in root.children:
+        chunks.extend(all_chunks_in_tree(child))
+    return chunks
