@@ -1,2 +1,8 @@
 .log
 .sh
+*.pyc
+*.pyo
+*.pyd
+*.pyw
+*.pyz
+*.pyj
