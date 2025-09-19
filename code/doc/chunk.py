@@ -40,7 +40,7 @@ def chunk_to_dict(chunk: Chunk) -> Dict[str, Any]:
 def all_chunks_in_tree(root: Section) -> List[Chunk]:
     chunks = []
     # chunks in current section
-    chunks.extend(root.chunks)
+    chunks.extend([chunk_to_dict(chunk) for chunk in root.chunks])
     # chunks in children sections
     for child in root.children:
         chunks.extend(all_chunks_in_tree(child))
