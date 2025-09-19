@@ -163,7 +163,6 @@ def split_into_chunk(text: str,
             table_start, table_end = table_to_split
             chunk_text = text[start:table_end].strip()
             end = table_end
-            contains_table = True
         else:
             # Normal chunking logic
             chunk_text = text[start:end]
@@ -234,7 +233,6 @@ def enrich_chunk_metadata(chunk: Chunk, section: Section,
     # Add section context
     enriched_metadata.update({
         "section_title": section.title,
-        "section_level": section.level,
         "section_breadcrumb": " > ".join(section.breadcrumb),
         "section_anchor": section.anchor,
         "chunk_position": f"{chunk.chunk_index + 1}/{len(section.chunks)}" if section.chunks else "1/1"
@@ -318,7 +316,7 @@ def parse_markdown(md_text: str,
     # Build tree with a stack by heading level
     root = Section(
         level=0, title="", anchor="", start_line=0, end_line=headings[0][2] if headings else doc_line_count,
-        text="", breadcrumb=[], id="root", children=[], metadata={}
+        chunks=[], breadcrumb=[], id="root", children=[], metadata={}
     )
     stack: List[Section] = [root]
     
@@ -331,10 +329,9 @@ def parse_markdown(md_text: str,
         section_id=root.id,
         preserve_sentences=True
     )
-    
     for chunk in chunks:
         chunk = enrich_chunk_metadata(chunk, root, doc_metadata)
-    root.chunks.extend(chunks)
+        root.chunks.append(chunk)
     root.metadata = {
         "total_chunks": len(chunks),
         "total_length": len(''.join(lines[0:root.end_line])),
@@ -386,21 +383,19 @@ def parse_markdown(md_text: str,
             anchor=anchor,
             start_line=body_start,
             end_line=body_end,
-            text=processed_text,
+            chunks=[],
             breadcrumb=breadcrumb,
             id=section_id,
-            chunks=chunks,
             children=[],
             metadata=section_metadata
         )
         
         # Enrich chunk metadata
         for chunk in chunks:
-            chunk = enrich_chunk_metadata(chunk, sec, doc_metadata)
-        
-        # Update chunk section references
-        for chunk in chunks:
+            # Update chunk section references
             chunk.section_id = section_id
+            chunk = enrich_chunk_metadata(chunk, sec, doc_metadata)
+            sec.chunks.append(chunk)
         
         parent.children.append(sec)
         stack.append(sec)
