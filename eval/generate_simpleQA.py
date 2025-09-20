@@ -19,8 +19,8 @@ if __name__ == "__main__":
     qatype_filepath = args.qatype_filepath
     filepath = args.input
     output_filepath = args.output
-    start_index = args.start_index
-    end_index = args.end_index
+    start_index = int(args.start_index)
+    end_index = int(args.end_index)
     llm_client = OpenAI(
         api_key=api_key_r1,
         base_url="https://api.siliconflow.cn/v1"
@@ -60,6 +60,7 @@ if __name__ == "__main__":
                         for qapair in generated_qapairs:
                             qapair['source_chunk_metadata'] = chunk['metadata']
                             qa_list.append(qapair)
+            break
             
     except Exception as e:
         print(f"Error at chunk {index}")
