@@ -1,9 +1,10 @@
-from doc.chunk import Section, Chunk
+from doc.chunk import Chunk
 import re
 import hashlib
 from typing import List, Optional, Tuple, Dict, Any
 from dataclasses import dataclass, field
 from langchain.docstore.document import Document
+from markdown_it import MarkdownIt
 
 # GFM 风格的“分隔行”判定：---、:---、---:、:---:，多列用 | 分隔；首尾 | 可选
 _SEP_RE = re.compile(
@@ -73,204 +74,25 @@ def detect_tables_in_text(text: str) -> List[Tuple[int, int]]:
 
     return boundaries
 
-def slugify(title: str) -> str:
-    """GitHub-ish slugify (simple and deterministic)."""
-    s = title.strip().lower()
-    s = re.sub(r'[^\w\- ]+', '', s)      # remove punctuation except - and space
-    s = re.sub(r'\s+', '-', s)           # spaces -> hyphens
-    s = re.sub(r'-{2,}', '-', s)         # collapse ---
-    return s.strip('-')
+def normalize_headings(headings):
+    if len(headings) == 0:
+        return []
+    for level in range(1, 4):
+        # Check if the level is present in the headings
+        if any(heading[0] == level for heading in headings):
+            continue
+        # If the level is not present, upgrade all the levels above it
+        gap = min([heading[0] - level if heading[0] > level else 4 for heading in headings])
+        for i, heading in enumerate(headings):
+            if heading[0] > level:
+                headings[i] = (heading[0] - gap, heading[1], heading[2], heading[3])
+    return headings
 
-def stable_id(*parts: str, limit: int = 16) -> str:
-    h = hashlib.sha1('||'.join(parts).encode('utf-8')).hexdigest()
-    return h[:limit]
-
-def split_into_chunk(text: str, 
-                    max_chunk_size: int = 500, 
-                    overlap_size: int = 50,
-                    section_id: str = "",
-                    preserve_sentences: bool = True) -> List[Chunk]:
-    """
-    Chunk markdown text with tables as atomic units.
-    
-    Args:
-        text: The text to chunk
-        max_chunk_size: Maximum characters per chunk
-        min_chunk_size: Minimum characters per chunk
-        overlap_size: Number of characters to overlap between chunks
-        section_id: ID of the parent section
-        preserve_sentences: Whether to preserve sentence boundaries
-        
-    Returns:
-        List of Chunk objects
-    """
-    # Detect tables in the text
-    table_boundaries = detect_tables_in_text(text)
-    
-    chunks = []
-    start = 0
-    chunk_index = 0
-    
-    while start < len(text):
-        # Determine the end position for this chunk
-        end = start + max_chunk_size
-        
-        if end >= len(text):
-            # Last chunk
-            chunk_text = text[start:].strip()
-                # Check if this chunk contains a table
-                # TODO: modify table format
-                # contains_table = any(start <= table_start < len(text) and start <= table_end <= len(text) 
-                #                    for table_start, table_end in table_boundaries)
-                
-            chunks.append(Chunk(
-                text=chunk_text,
-                start_char=start,
-                end_char=len(text),
-                chunk_index=chunk_index,
-                section_id=section_id,
-                metadata={"chunk_type": "final", "length": len(chunk_text)}
-            ))
-            break
-        
-        # Check if we're about to split a table
-        table_to_split = None
-        for table_start, table_end in table_boundaries:
-            if start < table_start < end < table_end:
-                # We would split this table - extend chunk to include entire table
-                table_to_split = (table_start, table_end)
-                break
-        
-        if table_to_split:
-            # Extend chunk to include the entire table
-            table_start, table_end = table_to_split
-            chunk_text = text[start:table_end].strip()
-            end = table_end
-        else:
-            # Normal chunking logic
-            chunk_text = text[start:end]
-            
-            if preserve_sentences:
-                # Find sentence boundaries
-                sentence_endings = ['.', '。', '!', '！', '?', '？', '\n\n']
-                best_break = end
-                
-                # Look for sentence endings in the last part of the chunk
-                search_start = max(start + 100, end - 100)
-                for i in range(end - 1, search_start - 1, -1):
-                    if text[i] in sentence_endings:
-                        best_break = i + 1
-                        break
-                
-                # If no sentence boundary found, look for other natural breaks
-                if best_break == end:
-                    # Look for paragraph breaks, commas, or other punctuation
-                    natural_breaks = [',', '，', '\n', ';', '；', ':', '：']
-                    for i in range(end - 1, search_start - 1, -1):
-                        if text[i] in natural_breaks:
-                            best_break = i + 1
-                            break
-                
-                chunk_text = text[start:best_break].strip()
-                end = best_break
-            else:
-                chunk_text = chunk_text.strip()
-            
-            # Check if this chunk contains a table
-            # TODO: modify table format
-            # contains_table = any(start <= table_start < end and start <= table_end <= end 
-            #                    for table_start, table_end in table_boundaries)
-        
-        # Ensure minimum chunk size
-        chunks.append(Chunk(
-            text=chunk_text,
-            start_char=start,
-            end_char=end,
-            chunk_index=chunk_index,
-            section_id=section_id,
-            metadata={"chunk_type": "normal", "length": len(chunk_text)}
-            ))
-        chunk_index += 1
-        
-        # Move start position with overlap
-        start = max(start + 1, end - overlap_size)
-    
-    return chunks
-
-def enrich_chunk_metadata(chunk: Chunk, section: Section, 
-                         doc_metadata: Dict[str, Any] = None) -> Chunk:
-    """
-    Enrich chunk metadata with additional context for better RAG performance.
-    
-    Args:
-        chunk: The chunk to enrich
-        section: The parent section
-        doc_metadata: Document-level metadata
-        
-    Returns:
-        Enriched chunk
-    """
-    enriched_metadata = chunk.metadata.copy()
-    
-    # Add section context
-    enriched_metadata.update({
-        "section_title": section.title,
-        "section_breadcrumb": " > ".join(section.breadcrumb),
-        "section_anchor": section.anchor,
-        "chunk_position": f"{chunk.chunk_index + 1}/{len(section.chunks)}" if section.chunks else "1/1"
-    })
-    
-    # Add document metadata if available
-    if doc_metadata:
-        enriched_metadata.update({
-            "doc_id": doc_metadata.get("doc_id", ""),
-            "doc_title": doc_metadata.get("title", ""),
-            "doc_year": doc_metadata.get("year", ""),
-            "doc_category": doc_metadata.get("category", ""),
-            "doc_link": doc_metadata.get("link", "")
-        })
-    
-    # TODO: Add content analysis
-    # enriched_metadata.update({
-    #     "word_count": len(chunk.text.split()),
-    #     "char_count": len(chunk.text),
-    #     "has_numbers": bool(re.search(r'\d', chunk.text)),
-    #     "has_dates": bool(re.search(r'\d{4}年|\d{1,2}月|\d{1,2}日', chunk.text)),
-    #     "has_urls": bool(re.search(r'http[s]?://', chunk.text)),
-    #     "sentence_count": len(re.split(r'[。！？]', chunk.text)) - 1
-    # })
-    
-    chunk.metadata = enriched_metadata
-    return chunk
-
-
-def parse_markdown(md_text: str, 
-                   doc_metadata: Dict[str, Any] = None,
-                   max_chunk_size: int = 500,
-                   overlap_size: int = 50,
-                chunk_sections: bool = True) -> Section:
-    """
-    Build an enhanced section tree with smart chunking that preserves tables as atomic units.
-    
-    Args:
-        md_text: The markdown text to build the section tree from
-        doc_metadata: Document-level metadata to enrich chunks
-        max_chunk_size: Maximum characters per chunk
-        min_chunk_size: Minimum characters per chunk
-        overlap_size: Number of characters to overlap between chunks
-        chunk_sections: Whether to chunk sections that are too long
-        
-    Returns:
-        Returns an enhanced root section whose children are top-level sections with chunks
-    """
-    from markdown_it import MarkdownIt
-    
-    # Parse the markdown text into tokens
+def extract_headings_from_mdtext(md_text: str) -> List[Tuple[int, str, int, int]]:
     md = MarkdownIt()
     tokens = md.parse(md_text)
     lines = md_text.splitlines(keepends=True)
     
-    # Collect all headings and their start lines
     headings: List[Tuple[int, str, int]] = []  # (level, title, start_line)
     i = 0
     while i < len(tokens):
@@ -290,99 +112,242 @@ def parse_markdown(md_text: str,
     
     # Add a sentinel "end" to compute section boundaries
     doc_line_count = len(lines)
-    bounds: List[Tuple[int, int]] = []  # (start_line, end_line) per heading
     for idx, (_, _, start) in enumerate(headings):
-        next_start = headings[idx + 1][2] if idx + 1 < len(headings) else doc_line_count
-        bounds.append((start, next_start))
+        next_start = doc_line_count
+        # search next heading with same level
+        for i in range(idx + 1, len(headings)):
+            if headings[i][0] <= headings[idx][0]:
+                next_start = headings[i][2]
+                break
+        #next_start = headings[idx + 1][2] if idx + 1 < len(headings) else doc_line_count
+        headings[idx] = headings[idx] + (next_start,)
     
-    # Build tree with a stack by heading level
-    root = Section(
-        level=0, title="", anchor="", start_line=0, end_line=headings[0][2] if headings else doc_line_count,
-        chunks=[], breadcrumb=[], id=stable_id("root"), children=[], metadata={}
-    )
-    stack: List[Section] = [root]
+    # Ensure the level starts from 1 and decreases gradually
+    headings = normalize_headings(headings)
     
-    # Add chunk for text from beginning to the first heading
-    chunks = split_into_chunk(
-        ''.join(lines[0:root.end_line]),
-        max_chunk_size=max_chunk_size,
-        overlap_size=overlap_size,
-        section_id=root.id,
-        preserve_sentences=True
-    )
-    print(''.join(lines[0:root.end_line]))
-    print(chunks)
-    for chunk in chunks:
-        chunk = enrich_chunk_metadata(chunk, root, doc_metadata)
-        root.chunks.append(chunk)
-    root.metadata = {
-        "total_chunks": len(chunks),
-        "total_length": len(''.join(lines[0:root.end_line])),
-    }
+    return headings
 
-    # Add chunks for each section
-    for (level, title, start_line), (s, e) in zip(headings, bounds):
-        # body starts after the heading line; end before next heading
-        body_start = start_line + 1
-        body_end = e
-        body_text = ''.join(lines[body_start:body_end])
-        
-        # Preprocess the text for RAG
-        processed_text = body_text
-        
-        # ascend/descend to the right parent
-        while stack and level <= stack[-1].level:
-            stack.pop()
-        parent = stack[-1] if stack else root
-        
-        breadcrumb = parent.breadcrumb + [title]
-        anchor = slugify(title)
-        section_id = stable_id(*breadcrumb)
-        
-        # Create chunks if the section is long enough and chunking is enabled
-        chunks = []
-        chunks = split_into_chunk(
-            processed_text,
-            max_chunk_size=max_chunk_size,
-            overlap_size=overlap_size,
-            section_id=section_id,
-            preserve_sentences=True
-        )
-       
-        # Create section metadata
-        section_metadata = {
-            "total_chunks": len(chunks),
-            "total_length": len(processed_text),
-            # "has_content": len(processed_text.strip()) > 0,
-            # "chunking_applied": chunk_sections and len(processed_text) > max_chunk_size,
-            # "contains_tables": len(detect_tables_in_text(processed_text)) > 0,
-            # "table_count": len(detect_tables_in_text(processed_text))
-        }
-        
-        sec = Section(
-            level=level,
-            title=title,
-            anchor=anchor,
-            start_line=body_start,
-            end_line=body_end,
-            chunks=[],
-            breadcrumb=breadcrumb,
-            id=section_id,
-            children=[],
-            metadata=section_metadata
-        )
-        
-        # Enrich chunk metadata
-        for chunk in chunks:
-            # Update chunk section references
-            chunk.section_id = section_id
-            chunk = enrich_chunk_metadata(chunk, sec, doc_metadata)
-            sec.chunks.append(chunk)
-        
-        parent.children.append(sec)
-        stack.append(sec)
+def extract_targeted_headings(headings: List[Tuple[int, str, int]], 
+                              target_level: int) -> List[Tuple[int, str, int]]:
+    return [heading for heading in headings if heading[0] == target_level]
+
+
+def split_into_chunks(md_text: str, 
+                      headings: List[Tuple[int, str, int, int]],
+                      current_heading_text: str = "",
+                      start_line: int = 0,
+                      end_line: int = None,
+                      current_level: int = 0,
+                      min_chunk_size: int = 100,
+                      max_chunk_size: int = 400
+                    ) -> List[Chunk]:
     
-    return root
+    # Calculate the length of the current text
+    current_text_lines = md_text.splitlines(keepends=True)[start_line:end_line]
+    current_text = ''.join(current_text_lines)
+    content_length = len(current_text)
+    
+    if content_length < max_chunk_size:
+        return [Chunk(
+            text=current_text,
+            metadata={
+                "level": current_level
+            }
+        )]
+    
+    # if there is no higher level heading, we need to split the chunk
+    target_level = current_level + 1
+    extracted_headings = extract_targeted_headings(headings, target_level)    
+    if not extracted_headings:
+        # NEVER split the table and complete sentence into different chunks
+        
+        table_boundaries = detect_tables_in_text(current_text)
+        chunks = []
+        start = 0
+        chunk_index = 0
+        
+        while start < len(current_text):
+            # Determine the end position for this chunk
+            end = start + max_chunk_size
+            
+            if end >= len(current_text):
+                # Last chunk
+                chunk_text = current_text[start:].strip()
+                chunks.append(Chunk(
+                    text=chunk_text,
+                    metadata={
+                        "level": current_level
+                    }
+                ))
+                break
+            
+            # Check if we're about to split a table
+            table_to_split = None
+            for table_start, table_end in table_boundaries:
+                if start < table_start < end < table_end:
+                    # We would split this table - extend chunk to include entire table
+                    table_to_split = (table_start, table_end)
+                    break
+            if table_to_split:
+                # Extend chunk to include the entire table
+                table_start, table_end = table_to_split
+                chunk_text = current_text[start:table_end].strip()
+                end = table_end
+            else:
+                # Normal chunking logic
+                chunk_text = current_text[start:end]
+                
+                # Find sentence boundaries
+                sentence_endings = ['.', '。', '!', '！', '?', '？', '\n\n']
+                best_break = end
+                
+                # Look for sentence boundaries in the last part of the chunk
+                search_start = max(start + 100, end - 100)
+                for i in range(end - 1, search_start - 1, -1):
+                    if current_text[i] in sentence_endings:
+                        best_break = i + 1
+                        break
+                
+                # If no sentence boundary found, look for other natural breaks
+                if best_break == end:
+                    # Look for paragraph breaks, commas, or other punctuation
+                    natural_breaks = [',', '，', '\n', ';', '；', ':', '：']
+                    for i in range(end - 1, search_start - 1, -1):
+                        if current_text[i] in natural_breaks:
+                            best_break = i + 1
+                            break
+                
+                chunk_text = current_text[start:best_break].strip()
+                end = best_break
+                
+            chunks.append(Chunk(
+                text=chunk_text,
+                metadata={
+                    "level": current_level
+                }
+            ))
+            start = end
+            chunk_index += 1
+            
+        return chunks
+                        
+    else:
+        sub_chunks = []
+        # Before first heading
+        if current_level == 0:
+            sub_chunks.append(Chunk(
+                text=''.join(current_text_lines[start_line:extracted_headings[0][2]]),
+                metadata={
+                    "level": current_level
+                }
+            ))
+        
+        # Filter headings to only include those within the current range
+        relevant_headings = []
+        for heading in extracted_headings:
+            heading_start = heading[2]
+            if heading_start >= start_line and (end_line is None or heading_start < end_line) and heading[0] == target_level:
+                relevant_headings.append(heading)
+        
+        # Process headings in order, ensuring no overlap
+        for i, heading in enumerate(relevant_headings):
+            sub_start_line = heading[2]
+            # Determine the end line for this heading
+            if i + 1 < len(relevant_headings):
+                sub_end_line = relevant_headings[i + 1][2]
+            else:
+                sub_end_line = end_line
+            
+            sub_chunks.extend(split_into_chunks(md_text, headings, heading[1], sub_start_line, sub_end_line, target_level))
+        return sub_chunks
+
+def merge_chunks(chunks: List[Chunk], max_chunk_size: int = 400) -> List[Chunk]:
+    merged_chunks = []
+    current_level = -1
+    current_chunk = None
+    for chunk in chunks:
+        if chunk.metadata["level"] != current_level:
+            if current_chunk:
+                merged_chunks.append(current_chunk)
+            current_level = chunk.metadata["level"]
+            current_chunk = chunk
+        else:
+            if current_chunk and len(current_chunk.text) + len(chunk.text) <= max_chunk_size:
+                current_chunk.text += '\n' + chunk.text
+            else:
+                if current_chunk:
+                    merged_chunks.append(current_chunk)
+                current_chunk = chunk
+    if current_chunk:
+        merged_chunks.append(current_chunk)
+    return merged_chunks
+
+def postprocess_chunks(chunks: List["Chunk"], doc_metadata: Dict[str, Any], overlap_size: int = 100):
+    postprocessed_chunks = []
+    
+    for index, chunk in enumerate(chunks):
+        postprocessed_chunk = Chunk(
+            text="",
+            metadata={}
+        )
+
+        # Chunk index
+        postprocessed_chunk.metadata["chunk_index"] = index
+
+        # Doc info
+        postprocessed_chunk.metadata.update({
+            "doc_id": doc_metadata.get("doc_id"),
+            "doc_title": doc_metadata.get("title"),
+            "doc_link": doc_metadata.get("link"),
+            "category": doc_metadata.get("category"),
+            "year": doc_metadata.get("year"),
+        })
+
+        # Start with current chunk text
+        text_parts = [chunk.text]
+
+        # Prefix overlap (previous chunk tail)
+        if index > 0:
+            prefix = chunks[index - 1].text[-overlap_size:]
+            text_parts.insert(0, prefix)  # put before current text
+
+        # Suffix overlap (next chunk head)
+        if index < len(chunks) - 1:
+            suffix = chunks[index + 1].text[:overlap_size]
+            text_parts.append(suffix)
+
+        # Join with line breaks
+        postprocessed_chunk.text = "\n".join(text_parts)
+
+        postprocessed_chunks.append(postprocessed_chunk)
+
+    return postprocessed_chunks
+
+def parse_markdown(md_text: str, doc_metadata: Dict[str, Any]) -> List[Chunk]:
+    headings = extract_headings_from_mdtext(md_text)
+    chunks = split_into_chunks(md_text, headings)
+    merged_chunks = merge_chunks(chunks)
+    merged_chunks = postprocess_chunks(merged_chunks, doc_metadata, overlap_size=50)
+    return merged_chunks
+
+
+"""
+--------------------------------
+--------------------------------
+"""
+
+
+def slugify(title: str) -> str:
+    """GitHub-ish slugify (simple and deterministic)."""
+    s = title.strip().lower()
+    s = re.sub(r'[^\w\- ]+', '', s)      # remove punctuation except - and space
+    s = re.sub(r'\s+', '-', s)           # spaces -> hyphens
+    s = re.sub(r'-{2,}', '-', s)         # collapse ---
+    return s.strip('-')
+
+def stable_id(*parts: str, limit: int = 16) -> str:
+    h = hashlib.sha1('||'.join(parts).encode('utf-8')).hexdigest()
+    return h[:limit]
 
 
 def convert_chunks_to_documents(chunks: List[Chunk], 
@@ -417,6 +382,7 @@ def convert_chunks_to_documents(chunks: List[Chunk],
         ))
     
     return documents
+
 
 
 
