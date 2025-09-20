@@ -1,0 +1,71 @@
+[
+    {
+        "answer": "8月14日",
+        "confidence": 1.0,
+        "detailed_type": "考试成绩公布时间",
+        "question": "2024年6月上海市普通高中学业水平合格性考试成绩将于何时公布？",
+        "rationale": "文本明确指出成绩公布的具体日期是8月14日。",
+        "type": "TIME",
+        "source_chunk_metadata": {
+            "chunk_type": "final",
+            "length": 50,
+            "section_title": "",
+            "section_breadcrumb": "",
+            "section_anchor": "",
+            "chunk_position": "1/1",
+            "doc_title": "2024年6月上海市普通高中学业水平合格性考试成绩将于8月14日公布",
+            "doc_year": "2024",
+            "doc_category": [
+                "高考学考",
+                "高中学业考"
+            ],
+            "doc_link": "https://www.shmeea.edu.cn/page/02100/20240812/18751.html"
+        }
+    },
+    {
+        "question": "2024年6月上海市普通高中学业水平合格性考试成绩公布的时间是什么时候？",
+        "answer": "2024年8月14日（星期三）",
+        "type": "PROCESSES",
+        "detailed_type": "考试成绩公布安排通知",
+        "confidence": 1.0,
+        "rationale": "问题直接基于文本中的考试成绩公布日期，信息明确且在原文中有直接对应。",
+        "source_chunk_metadata": {
+            "chunk_type": "final",
+            "length": 50,
+            "section_title": "",
+            "section_breadcrumb": "",
+            "section_anchor": "",
+            "chunk_position": "1/1",
+            "doc_title": "2024年6月上海市普通高中学业水平合格性考试成绩将于8月14日公布",
+            "doc_year": "2024",
+            "doc_category": [
+                "高考学考",
+                "高中学业考"
+            ],
+            "doc_link": "https://www.shmeea.edu.cn/page/02100/20240812/18751.html"
+        }
+    },
+    {
+        "question": "2024年6月上海市普通高中学业水平合格性考试的成绩公布时间是什么时候？",
+        "answer": "2024年8月14日（星期三）",
+        "type": "RESULTS",
+        "detailed_type": "考试成绩公布时间",
+        "confidence": 1.0,
+        "rationale": "文本明确提到2024年6月上海市普通高中学业水平合格性考试成绩将于8月14日公布，因此该问题和答案直接来源于文本。",
+        "source_chunk_metadata": {
+            "chunk_type": "final",
+            "length": 50,
+            "section_title": "",
+            "section_breadcrumb": "",
+            "section_anchor": "",
+            "chunk_position": "1/1",
+            "doc_title": "2024年6月上海市普通高中学业水平合格性考试成绩将于8月14日公布",
+            "doc_year": "2024",
+            "doc_category": [
+                "高考学考",
+                "高中学业考"
+            ],
+            "doc_link": "https://www.shmeea.edu.cn/page/02100/20240812/18751.html"
+        }
+    }
+]
