@@ -43,8 +43,7 @@ Document information:
 - Year: {doc_year}  
 - Category: {doc_category}  
 
-Text to analyze:  
-{section}  
+Text to analyze: 
 {text}  
 
 Your task:  
@@ -72,7 +71,10 @@ class TypeClassifier:
 
     def classify_type(self, chunk: Chunk) -> str:
         system_prompt = TYPE_CLASSIFIER_SYSTEM_PROMPT.format(question_types=self.predefined_types_dict.keys(), example_detailed_types=';'.join(random.choices(list(self.predefined_types_dict[random.choice(list(self.predefined_types_dict.keys()))]), k=3)))
-        user_prompt = TYPE_CLASSIFIER_USER_PROMPT_TEMPLATE.format(text=chunk['text'], section=chunk['metadata']['section_breadcrumb'], doc_title=chunk['metadata']['doc_title'], doc_year=chunk['metadata']['doc_year'], doc_category=chunk['metadata']['doc_category'])
+        user_prompt = TYPE_CLASSIFIER_USER_PROMPT_TEMPLATE.format(text=chunk['text'], 
+                                                                  doc_title=chunk['metadata']['doc_title'], 
+                                                                  doc_year=chunk['metadata']['year'], 
+                                                                  doc_category=chunk['metadata']['category'])
         try:
             response = self.llm_client.chat.completions.create(
             model="Qwen/Qwen2.5-7B-Instruct",

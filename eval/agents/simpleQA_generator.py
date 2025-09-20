@@ -47,7 +47,6 @@ Details:
 - Document category: {doc_category} 
 
 Text to analyze:  
-{section}  
 {text}  
 
 Your task:  
@@ -81,13 +80,17 @@ class SimpleQAGenerator:
         if type not in self.predefined_types_dict:
             return None
         text = chunk['text']
-        section = chunk['metadata']['section_breadcrumb']
         doc_title = chunk['metadata']['doc_title']
-        doc_year = chunk['metadata']['doc_year']
-        doc_category = chunk['metadata']['doc_category']
+        doc_year = chunk['metadata']['year']
+        doc_category = chunk['metadata']['category']
         
         system_prompt = SIMPLE_QA_GENERATION_SYSTEM_PROMPT
-        user_prompt = SIMPLE_QA_GENERATION_USER_PROMPT_TEMPLATE.format(type=type, detailed_types=detailed_types, section=section, text=text, doc_title=doc_title, doc_year=doc_year, doc_category=doc_category)
+        user_prompt = SIMPLE_QA_GENERATION_USER_PROMPT_TEMPLATE.format(type=type, 
+                                                                       detailed_types=detailed_types, 
+                                                                       text=text, 
+                                                                       doc_title=doc_title,
+                                                                       doc_year=doc_year, 
+                                                                       doc_category=doc_category)
         
         try:
             response = self.llm_client.chat.completions.create(

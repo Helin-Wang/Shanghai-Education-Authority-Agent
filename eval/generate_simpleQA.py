@@ -47,12 +47,14 @@ if __name__ == "__main__":
                         for qapair in generated_qapairs:
                             qapair['source_chunk_metadata'] = chunk['metadata']
                             qa_list.append(qapair)
-            break
+            
     except Exception as e:
         print(f"Error at chunk {index}")
         print(e)
         
     # TODO: deduplicate
+    # For qapair from the same year, same doc_category, calculate the similarity
+    # 对 query 用 SimHash/向量相似做 0.9 阈值合并，只保留 N 种问法。
     
     
     
