@@ -4,17 +4,30 @@ from openai import OpenAI
 import json
 import pandas as pd
 from tqdm import tqdm
-
+import argparse
 api_key_r1 = 'sk-hmqokjrhfszsquludqhbdzftggjriimfelvjjqwzccxnqxmn'
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--qatype_filepath", help="QAPair Type Filepath", default="../data/eval/extracted_qatype_v0.csv")
+    parser.add_argument("--input", help="Chunk Filepath", default="../data/v1_chunks.json")
+    parser.add_argument("--output", help="Output Filepath", default="../data/eval/simpleQA_v0.json")
+    parser.add_argument("--start_index", help="Start Index", default=0)
+    parser.add_argument("--end_index", help="End Index", default=None)
+    
+    args = parser.parse_args()
+    qatype_filepath = args.qatype_filepath
+    filepath = args.input
+    output_filepath = args.output
+    start_index = args.start_index
+    end_index = args.end_index
     llm_client = OpenAI(
         api_key=api_key_r1,
         base_url="https://api.siliconflow.cn/v1"
     )
 
     # load possible question types
-    with open('../data/eval/extracted_qatype_v0.csv', 'r') as f:
+    with open(qatype_filepath, 'r') as f:
         extracted_qatype = pd.read_csv(f)
     
     predefined_types_dict = dict()
@@ -30,12 +43,12 @@ if __name__ == "__main__":
     generator = SimpleQAGenerator(llm_client, predefined_types_dict)
     
     # load chunk
-    with open('../data/v1_chunks.json', 'r') as f:
+    with open(filepath, 'r') as f:
         chunks = json.load(f)
     
     qa_list = []
     try:
-        for index, chunk in tqdm(enumerate(chunks), total=len(chunks)):
+        for index, chunk in tqdm(enumerate(chunks[start_index:end_index]), total=len(chunks[start_index:end_index])):
             type_list = type_classifier.classify_type(chunk)
             
             if type_list is None:
@@ -57,7 +70,8 @@ if __name__ == "__main__":
     # 对 query 用 SimHash/向量相似做 0.9 阈值合并，只保留 N 种问法。
     
     
-    
-    with open('../data/eval/simpleQA_v0.json', 'w') as f:
+    # Rewrite output filepath
+    output_filepath = output_filepath.replace('.json', f'_{start_index}_{end_index}.json')
+    with open(output_filepath, 'w') as f:
         json.dump(qa_list, f, ensure_ascii=False, indent=4)
         
