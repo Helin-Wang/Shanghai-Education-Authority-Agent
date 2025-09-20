@@ -6,3 +6,5 @@
 *.pyw
 *.pyz
 *.pyj
+
+*.slurm
