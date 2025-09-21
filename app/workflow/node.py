@@ -21,7 +21,7 @@ def retrieve_node(state: AgentState) -> AgentState:
     if "retriever" not in state or state["retriever"] is None:
         # Use hybrid retriever combining BM25 and FAISS
         hybrid_retriever = HybridRetriever(
-            data_path="../data/v0_html_content.json",
+            data_path="../data/v1_chunks.json",
             k=6  # Retrieve more documents initially, will be filtered by reranker
         )
         state["retriever"] = hybrid_retriever
