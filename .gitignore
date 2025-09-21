@@ -8,3 +8,7 @@
 *.pyj
 
 *.slurm
+
+.DS_Store
+
+*.ipynb
