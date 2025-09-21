@@ -12,3 +12,5 @@
 .DS_Store
 
 *.ipynb
+
+app/models/m3e-base/*
