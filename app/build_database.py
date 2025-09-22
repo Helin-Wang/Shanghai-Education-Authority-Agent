@@ -22,9 +22,9 @@ if __name__ == "__main__":
     db_path = '../data/shanghai_education_authority_agent.db'
     if os.path.exists(db_path):
         os.remove(db_path)
-    init_table()
     
     conn = sqlite3.connect(db_path)
+    init_table()
     embedding_model = M3eEmbeddings()
     
     # Build Document Table
