@@ -7,6 +7,8 @@ from database.init import init_table
 import sqlite3
 from database.utils import insert_chunk, insert_document, insert_chunk_metadata, insert_chunk_embedding
 from models.M3eEmbedding import M3eEmbeddings
+import os
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--filepath", type=str, default="../data/v0_content.json")
@@ -17,9 +19,14 @@ if __name__ == "__main__":
     with open(filepath, "r", encoding="utf-8") as f:
         data = json.load(f)
     
+    db_path = '../data/shanghai_education_authority_agent.db'
+    if os.path.exists(db_path):
+        os.remove(db_path)
     init_table()
-    conn = sqlite3.connect('../data/shanghai_education_authority_agent.db')
+    
+    conn = sqlite3.connect(db_path)
     embedding_model = M3eEmbeddings()
+    
     # Build Document Table
     for item in data:
         insert_document(conn, item['doc_id'], item['title'], item['link'], item['year'], ";".join(item['category']), item['published_date'], item['crawl_time'], item['markdown'])
