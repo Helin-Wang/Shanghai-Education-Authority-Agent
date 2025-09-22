@@ -3,6 +3,7 @@ from tqdm import tqdm
 from doc.utils import parse_markdown
 import argparse
 from doc.chunk import chunk_to_dict
+from database.init import init_table
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -14,7 +15,7 @@ if __name__ == "__main__":
     with open(filepath, "r", encoding="utf-8") as f:
         data = json.load(f)
     
-    
+    init_table()
     processed_chunks = []
     for index, item in tqdm(enumerate(data), total=len(data)):
         raw_markdown = item['markdown']
