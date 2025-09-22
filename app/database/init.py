@@ -1,9 +1,7 @@
 import sqlite3
 
-conn = sqlite3.connect('../data/shanghai_education_authority_agent.db')
-cursor = conn.cursor()
-
-def init_table():
+def init_table(conn):
+    cursor = conn.cursor()
     # -- documents
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS documents (
@@ -45,5 +43,4 @@ def init_table():
     ''')
     
     conn.commit()
-    conn.close()
 

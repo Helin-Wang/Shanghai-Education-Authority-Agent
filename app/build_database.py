@@ -24,7 +24,7 @@ if __name__ == "__main__":
         os.remove(db_path)
     
     conn = sqlite3.connect(db_path)
-    init_table()
+    init_table(conn)
     embedding_model = M3eEmbeddings()
     
     # Build Document Table
