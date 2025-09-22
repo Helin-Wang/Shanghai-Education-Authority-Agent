@@ -17,3 +17,5 @@ app/models/m3e-base/*
 app/models/bge-reranker-base/*
 
 *.db
+
+*/faiss_index/*
