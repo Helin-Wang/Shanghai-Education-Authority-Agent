@@ -7,18 +7,34 @@ import argparse
 import json
 import sqlite3
 from tqdm import tqdm
+import pandas as pd
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--qapair_filepath", help="QAPair Filepath", default="../data/eval/simpleQA_v0.json")
+    parser.add_argument("--results_filepath", help="QAPair Filepath", default="./results/simpleQA_v0.json")
     args = parser.parse_args()
     qapair_filepath = args.qapair_filepath
+    results_filepath = args.results_filepath
     
+    print("Loading QA Pairs...")
+    print(qapair_filepath)
     # Load qapairs
-    with open(qapair_filepath, "r", encoding="utf-8") as f:
-        qapairs = json.load(f)
-    
+    qapairs = []
+    if qapair_filepath.endswith('.json'):
+        print("JSON")
+        with open(qapair_filepath, "r", encoding="utf-8") as f:
+            qapairs = json.load(f)
+    else:
+        df = pd.read_csv(qapair_filepath)
+        for index, row in df.iterrows():
+            qapair = {
+                "question": row['问题'],
+                'answer': row['答案']
+            }
+        
     eval_results = []
+    conn = sqlite3.connect("../data/shanghai_education_authority_agent.db")
     for qapair in tqdm(qapairs):
         question = qapair["question"]
         initial_state = {
@@ -28,22 +44,23 @@ if __name__ == "__main__":
             "answer": None,
             "retriever": None,
             "llm": None,
-            "conn": sqlite3.connect("../data/shanghai_education_authority_agent.db"),
+            "conn": conn,
             "faiss_db_path": "../data/faiss_index"
         }
         result_state = workflow_app.invoke(initial_state)
-        # print the retrieved docs
-        
+
         eval_results.append({
             "question": question,
             "reranked_docs": ",".join([doc.metadata['doc_id'] for doc in result_state["reranked_docs"]]),
             "answer": result_state["answer"],
             "ground_truth": qapair["answer"]
         })
-   
+        
+    conn.close()
+    
     # create results directory if not exists
     if not os.path.exists("./results"):
         os.makedirs("./results")
     
-    with open("./results/eval_results_v0.json", "w", encoding="utf-8") as f:
+    with open(results_filepath, "w", encoding="utf-8") as f:
         json.dump(eval_results, f, ensure_ascii=False, indent=4)
