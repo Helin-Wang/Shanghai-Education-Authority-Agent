@@ -9,6 +9,6 @@
 
 *.slurm
 
-.DS_Store
+*.DS_Store
 
 *.ipynb
