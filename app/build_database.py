@@ -47,10 +47,6 @@ if __name__ == "__main__":
         }
         chunks = parse_markdown(raw_markdown, doc_metadata)
         chunks_dict = [chunk_to_dict(chunk) for chunk in chunks]
-        for chunk in chunks_dict:
-            chunk['doc_id'] = item['doc_id']
-            chunk['category'] = ";".join(item['category'])
-            chunk['year'] = item['year']
         processed_chunks.extend(chunks_dict)
         
     # Save as chunks
@@ -60,7 +56,7 @@ if __name__ == "__main__":
     # Build Chunk-related Tables
     for chunk in processed_chunks:
         chunk['embedding'] = embedding_model.embed_text(chunk['text'])
-        insert_chunk(conn, chunk['chunk_index'], chunk['text'])
-        insert_chunk_metadata(conn, chunk['chunk_index'], chunk['doc_id'], chunk['category'], chunk['year'])
-        insert_chunk_embedding(conn, chunk['chunk_index'], chunk['embedding'])
+        insert_chunk(conn, chunk['metadata']['chunk_index'], chunk['text'])
+        insert_chunk_metadata(conn, chunk['metadata']['chunk_index'], chunk['metadata']['doc_id'], ";".join(chunk['metadata']['category']), chunk['metadata']['year'])
+        insert_chunk_embedding(conn, chunk['metadata']['chunk_index'], chunk['embedding'])
     conn.close()
