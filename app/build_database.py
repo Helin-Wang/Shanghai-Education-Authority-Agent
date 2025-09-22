@@ -41,7 +41,6 @@ if __name__ == "__main__":
             chunk['doc_id'] = item['doc_id']
             chunk['category'] = ";".join(item['category'])
             chunk['year'] = item['year']
-            chunk['embedding'] = embedding_model.embed_text(chunk['text'])
         processed_chunks.extend(chunks_dict)
         
     # Save as chunks
@@ -50,6 +49,7 @@ if __name__ == "__main__":
         
     # Build Chunk-related Tables
     for chunk in processed_chunks:
+        chunk['embedding'] = embedding_model.embed_text(chunk['text'])
         insert_chunk(conn, chunk['chunk_id'], chunk['text'])
         insert_chunk_metadata(conn, chunk['chunk_id'], chunk['doc_id'], chunk['category'], chunk['year'])
         insert_chunk_embedding(conn, chunk['chunk_id'], chunk['embedding'])
