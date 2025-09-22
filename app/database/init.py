@@ -43,4 +43,7 @@ def init_table():
             embedding BLOB
         )
     ''')
+    
+    conn.commit()
+    conn.close()
 
