@@ -292,7 +292,7 @@ def postprocess_chunks(chunks: List["Chunk"], doc_metadata: Dict[str, Any], over
         )
 
         # Chunk index
-        postprocessed_chunk.metadata["chunk_index"] = index
+        postprocessed_chunk.metadata["chunk_index"] = doc_metadata.get("doc_id") + "_chunk_" + str(index) # sha1_hex(item['link'])_chunk_index
 
         # Doc info
         postprocessed_chunk.metadata.update({
