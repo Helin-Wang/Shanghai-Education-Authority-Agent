@@ -32,6 +32,7 @@ if __name__ == "__main__":
                 "question": row['问题'],
                 'answer': row['答案']
             }
+            qapairs.append(qapair)
         
     eval_results = []
     conn = sqlite3.connect("../data/shanghai_education_authority_agent.db")
