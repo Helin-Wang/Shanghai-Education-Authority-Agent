@@ -56,6 +56,24 @@ def FTS5Index(conn):
     ''')
     conn.commit()
 
+def bm25_search(conn, query: str):
+    # Tokenize query
+    query_seg = " ".join(jieba.cut(query))
+
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT c.chunk_id, c.doc_id, c.text, bm25(chunks_fts) AS score
+        FROM chunks_fts
+        JOIN chunk_metadata c USING(chunk_id)
+        JOIN chunks USING(chunk_id)
+        WHERE chunks_fts MATCH ?
+        ORDER BY score LIMIT ? 
+    ''', (query_seg,))
+    rows = cursor.fetchall()
+    return rows
+    
+   
+
 
 def FAISSIndex(docs: List[Document], db_path: str):
     embedding_model = M3eEmbeddings()

@@ -7,11 +7,12 @@ from langchain_community.vectorstores import FAISS
 from models.M3eEmbedding import M3eEmbeddings
 import json
 from langchain.text_splitter import RecursiveCharacterTextSplitter
+import sqlite3
 
 class HybridRetriever:
     """Hybrid retriever combining BM25 keyword search and FAISS semantic search"""
     
-    def __init__(self, docs: List[Document] = None, data_path: str = None, k: int = 10):
+    def __init__(self, faiss_db_path: str = None, conn: sqlite3.Connection = None, k: int = 10):
         """
         Initialize hybrid retriever
         
@@ -25,41 +26,49 @@ class HybridRetriever:
         self.faiss_db = None
         self.embedding_model = M3eEmbeddings()
         
-        if docs is not None:
-            self._build_indexes(docs)
-        elif data_path is not None:
-            self._build_from_data_path(data_path)
+        # if docs is not None:
+        #     self._build_indexes(docs)
+        # elif data_path is not None:
+        #     self._build_from_data_path(data_path)
+        if faiss_db_path is not None:
+            self._build_from_faiss(faiss_db_path)
         else:
-            raise ValueError("Either docs or data_path must be provided")
+            raise ValueError("faiss_db_path must be provided")
+        
+        if conn is not None:
+            self._build_from_conn(conn)
+        else:
+            raise ValueError("conn must be provided")
     
-    def _build_from_data_path(self, data_path: str):
-        """Build indexes from JSON data file"""
-        with open(data_path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        
-        # TODO: Filter data to keep only years 2023-2024
-        # filtered_data = [item for item in data if item['year'] in ['2023', '2024']]
-        filtered_data = data
-        
-        # Convert to Document
-        docs = [Document(page_content=f'{item["text"]}', 
-                         metadata=item['metadata']) for item in filtered_data]
-        
-        # Split docs into chunks
-        chunks = []
-        for doc in docs:
-            chunks.extend(RecursiveCharacterTextSplitter(chunk_size=200, chunk_overlap=50).split_documents([doc]))
-        
-        self._build_indexes(chunks)
+    def _build_from_faiss(self, faiss_db_path: str):
+        """Build indexes from FAISS database"""
+        self.faiss_db = FAISS.load_local(faiss_db_path, embeddings=self.embedding_model, allow_dangerous_deserialization=True)
+        # self.faiss_db.k = self.k
     
-    def _build_indexes(self, docs: List[Document]):
-        """Build both BM25 and FAISS indexes"""
-        # Build BM25 index
+    def _build_from_conn(self, conn: sqlite3.Connection):
+        """Build indexes from SQLite database"""
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT chunk_id, page_content, doc_id, doc_title, doc_link, category, year
+            FROM v_chunks_join
+            ORDER BY doc_id, chunk_id
+        """)
+        rows = cur.fetchall()
+        
+        docs = []
+        for chunk_id, text, doc_id, doc_title, doc_link, category, year in rows:
+            md = {
+                "chunk_id": chunk_id,
+                "doc_id": doc_id,
+                "doc_title": doc_title,
+                "doc_link": doc_link,
+                "category": category,
+                "year": year,
+            }
+            docs.append(Document(page_content=text or "", metadata=md))
+            
         self.bm25_retriever = BM25Retriever.from_documents(docs)
         self.bm25_retriever.k = self.k
-        
-        # Build FAISS index
-        self.faiss_db = FAISS.from_documents(docs, embedding=self.embedding_model)
     
     def retrieve(self, query: str, alpha: float = 0.5) -> List[Document]:
         """

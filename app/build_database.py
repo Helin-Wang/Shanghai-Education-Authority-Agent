@@ -3,9 +3,9 @@ from tqdm import tqdm
 from doc.utils import parse_markdown
 import argparse
 from doc.chunk import chunk_to_dict
-from database.init import init_table
+from database.init import init_table, create_view
 import sqlite3
-from database.utils import insert_chunk, insert_document, insert_chunk_metadata, insert_chunk_embedding
+from database.utils import insert_chunk, insert_document, insert_chunk_metadata
 from models.M3eEmbedding import M3eEmbeddings
 import os
 from langchain.schema import Document
@@ -59,7 +59,8 @@ if __name__ == "__main__":
     for chunk in processed_chunks:
         insert_chunk(conn, chunk['metadata']['chunk_index'], chunk['text'])
         insert_chunk_metadata(conn, chunk['metadata']['chunk_index'], chunk['metadata']['doc_id'], ";".join(chunk['metadata']['category']), chunk['metadata']['year'])
-        insert_chunk_embedding(conn, chunk['metadata']['chunk_index'], embedding_model.embed_text(chunk['text']))
+        
+    create_view(db_path)
     
     with open("../data/v1_chunks.json", "r", encoding="utf-8") as f:
         processed_chunks = json.load(f)

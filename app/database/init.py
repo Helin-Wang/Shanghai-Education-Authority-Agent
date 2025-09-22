@@ -35,13 +35,27 @@ def init_table(db_path):
         )
     ''')
 
-    # --chunk embedding
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS chunk_embedding (
-            chunk_id TEXT PRIMARY KEY,
-            embedding BLOB
-        )
-    ''')
-    
     conn.commit()
     conn.close()
+
+
+def create_view(db_path):
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    cursor.execute('''
+    CREATE VIEW IF NOT EXISTS v_chunks_join AS
+        SELECT
+        c.chunk_id,
+        c.text                         AS page_content,
+        cm.doc_id,
+        d.title                        AS doc_title,
+        d.link                         AS doc_link,
+        cm.category,
+        cm.year,
+        d.published_date,
+        d.crawl_time
+        FROM chunks c
+        JOIN chunk_metadata cm ON cm.chunk_id = c.chunk_id
+        JOIN documents d       ON d.doc_id    = cm.doc_id;      
+    ''')
+    conn.commit()
