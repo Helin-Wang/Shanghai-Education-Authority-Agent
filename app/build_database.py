@@ -23,15 +23,18 @@ if __name__ == "__main__":
     if os.path.exists(db_path):
         os.remove(db_path)
     
-    conn = sqlite3.connect(db_path)
-    init_table(conn)
+    print("Initializing Database...")
+    init_table(db_path)
     embedding_model = M3eEmbeddings()
     
     # Build Document Table
+    print("Building Document Table...")
+    conn = sqlite3.connect(db_path)
     for item in data:
         insert_document(conn, item['doc_id'], item['title'], item['link'], item['year'], ";".join(item['category']), item['published_date'], item['crawl_time'], item['markdown'])
     
     # Split into chunks
+    print("Building Chunk-related Table")
     processed_chunks = []
     for index, item in tqdm(enumerate(data), total=len(data)):
         raw_markdown = item['markdown']
@@ -57,7 +60,7 @@ if __name__ == "__main__":
     # Build Chunk-related Tables
     for chunk in processed_chunks:
         chunk['embedding'] = embedding_model.embed_text(chunk['text'])
-        insert_chunk(conn, chunk['chunk_id'], chunk['text'])
-        insert_chunk_metadata(conn, chunk['chunk_id'], chunk['doc_id'], chunk['category'], chunk['year'])
-        insert_chunk_embedding(conn, chunk['chunk_id'], chunk['embedding'])
+        insert_chunk(conn, chunk['chunk_index'], chunk['text'])
+        insert_chunk_metadata(conn, chunk['chunk_index'], chunk['doc_id'], chunk['category'], chunk['year'])
+        insert_chunk_embedding(conn, chunk['chunk_index'], chunk['embedding'])
     conn.close()

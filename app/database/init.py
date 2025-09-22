@@ -1,6 +1,7 @@
 import sqlite3
 
-def init_table(conn):
+def init_table(db_path):
+    conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
     # -- documents
     cursor.execute('''
@@ -43,4 +44,4 @@ def init_table(conn):
     ''')
     
     conn.commit()
-
+    conn.close()
