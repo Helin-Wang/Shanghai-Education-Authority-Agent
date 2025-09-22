@@ -11,6 +11,7 @@ from markitdown import MarkItDown
 import io
 from typing import List
 from tqdm import tqdm
+from database.utils import sha1_hex
 BASE_URL = "https://www.shmeea.edu.cn"
 
 # TODO: Do not use css selector to crawl content, use html to crawl content; and then use beautifulsoup to extract <div class=trout-region-content/class=Article_content>
@@ -254,6 +255,7 @@ def convert_html_to_markdown(html: str) -> str:
 
 def postprocess_content(data: List[dict]) -> List[dict]:
     for item in tqdm(data, desc="Converting HTML to Markdown"):
+        item['doc_id'] = sha1_hex(item['link'])
         item['markdown'] = convert_html_to_markdown(item['content'])
     return data
     
