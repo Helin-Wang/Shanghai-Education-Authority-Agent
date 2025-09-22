@@ -8,6 +8,8 @@ import sqlite3
 from database.utils import insert_chunk, insert_document, insert_chunk_metadata, insert_chunk_embedding
 from models.M3eEmbedding import M3eEmbeddings
 import os
+from langchain.schema import Document
+from database.index import FAISSIndex, FTS5Index
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -55,8 +57,19 @@ if __name__ == "__main__":
         
     # Build Chunk-related Tables
     for chunk in processed_chunks:
-        chunk['embedding'] = embedding_model.embed_text(chunk['text'])
         insert_chunk(conn, chunk['metadata']['chunk_index'], chunk['text'])
         insert_chunk_metadata(conn, chunk['metadata']['chunk_index'], chunk['metadata']['doc_id'], ";".join(chunk['metadata']['category']), chunk['metadata']['year'])
-        insert_chunk_embedding(conn, chunk['metadata']['chunk_index'], chunk['embedding'])
+        insert_chunk_embedding(conn, chunk['metadata']['chunk_index'], embedding_model.embed_text(chunk['text']))
+    
+    with open("../data/v1_chunks.json", "r", encoding="utf-8") as f:
+        processed_chunks = json.load(f)
+    
+    # Build Langchain Documents
+    langchain_documents = [Document(page_content=chunk['text'], metadata=chunk['metadata']) for chunk in processed_chunks]
+    
+    # Build FAISS Index
+    FAISSIndex(langchain_documents, "../data/faiss_index")
+    
+    # Build FTS5 Index
+    FTS5Index(conn)
     conn.close()
