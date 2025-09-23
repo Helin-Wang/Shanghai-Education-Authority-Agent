@@ -19,3 +19,5 @@ app/models/bge-reranker-base/*
 *.db
 
 */faiss_index/*
+
+*/temp.py
