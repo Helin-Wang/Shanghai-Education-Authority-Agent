@@ -7,11 +7,13 @@ from models.BgeReranker import BgeReranker
 from models.HybridRetriever import HybridRetriever
 import os
 from workflow.state import AgentState
+from utils import extract_year, extract_category
 
 # Initialize API configuration
 api_key = 'sk-hmqokjrhfszsquludqhbdzftggjriimfelvjjqwzccxnqxmn'
 os.environ["OPENAI_API_BASE"] = 'https://api.siliconflow.cn/v1'
 os.environ["OPENAI_API_KEY"] = api_key
+
 
 def retrieve_node(state: AgentState) -> AgentState:
     """根据查询从不同数据库中检索相关文档 - 使用混合检索方法"""
@@ -26,6 +28,12 @@ def retrieve_node(state: AgentState) -> AgentState:
             k=6  # Retrieve more documents initially, will be filtered by reranker
         )
         state["retriever"] = hybrid_retriever
+    
+    # Extract year and category from query
+    years = extract_year(query)
+    state["years"] = years
+    categories = extract_category(query)
+    state["categories"] = categories
     
     # Retrieve documents using hybrid approach
     retriever = state["retriever"]

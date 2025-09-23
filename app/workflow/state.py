@@ -14,3 +14,5 @@ class AgentState(TypedDict):
     retriever: Optional[Any]  # Store retriever instance
     reranker: Optional[Any]  # Store reranker instance
     llm: Optional[Any]  # Store LLM instance
+    years: Optional[List[str]]  # Store years
+    categories: Optional[List[str]]  # Store categories
