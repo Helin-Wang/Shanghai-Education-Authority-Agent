@@ -3,6 +3,7 @@ from langchain.schema import Document
 from typing import List
 from models.M3eEmbedding import M3eEmbeddings
 import jieba
+from langchain_community.vectorstores import Chroma
 
 def FTS5Index(conn):
     cursor = conn.cursor()
@@ -72,7 +73,12 @@ def bm25_search(conn, query: str):
     rows = cursor.fetchall()
     return rows
     
-   
+def ChromaIndex(docs: List[Document], db_path: str):
+    embedding_model = M3eEmbeddings()
+    
+    # Build and saveChroma index
+    chroma_db = Chroma.from_documents(docs, embedding=embedding_model, persist_directory=db_path)
+    chroma_db.persist()
 
 
 def FAISSIndex(docs: List[Document], db_path: str):

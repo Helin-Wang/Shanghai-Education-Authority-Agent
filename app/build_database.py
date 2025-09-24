@@ -10,6 +10,7 @@ from models.M3eEmbedding import M3eEmbeddings
 import os
 from langchain.schema import Document
 from database.index import FAISSIndex, FTS5Index
+from database.index import ChromaIndex
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -65,11 +66,13 @@ if __name__ == "__main__":
     with open("../data/v1_chunks.json", "r", encoding="utf-8") as f:
         processed_chunks = json.load(f)
     
-    # Build Langchain Documents
+    # Build Langchain Documents, use ';'.join(chunk['metadata']['category']) as category
     langchain_documents = [Document(page_content=chunk['text'], metadata=chunk['metadata']) for chunk in processed_chunks]
+    for i in range(len(langchain_documents)):
+        langchain_documents[i].metadata['category'] = ';'.join(langchain_documents[i].metadata['category'])
     
-    # Build FAISS Index
-    FAISSIndex(langchain_documents, "../data/faiss_index")
+    # Build Chroma Index
+    ChromaIndex(langchain_documents, "../data/chromadb_index")
     
     # Build FTS5 Index
     FTS5Index(conn)
