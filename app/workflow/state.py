@@ -11,6 +11,7 @@ class AgentState(TypedDict):
     
     conn: Optional[Any]  # Store connection instance
     faiss_db_path: Optional[Any]  # Store FAISS database path
+    chroma_db_path: Optional[Any]  # Store Chroma database path
     retriever: Optional[Any]  # Store retriever instance
     reranker: Optional[Any]  # Store reranker instance
     llm: Optional[Any]  # Store LLM instance

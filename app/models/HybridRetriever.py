@@ -3,16 +3,17 @@ import numpy as np
 from typing import List, Tuple, Dict, Any
 from langchain.schema import Document
 from langchain_community.retrievers import BM25Retriever
-from langchain_community.vectorstores import FAISS
+from langchain_community.vectorstores import FAISS, Chroma
 from models.M3eEmbedding import M3eEmbeddings
 import json
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 import sqlite3
+from database.utils import chroma_filter, chroma_search
 
 class HybridRetriever:
     """Hybrid retriever combining BM25 keyword search and FAISS semantic search"""
     
-    def __init__(self, faiss_db_path: str = None, conn: sqlite3.Connection = None, k: int = 10):
+    def __init__(self, faiss_db_path: str = None, chroma_db_path: str = None, conn: sqlite3.Connection = None, k: int = 10):
         """
         Initialize hybrid retriever
         
@@ -24,6 +25,7 @@ class HybridRetriever:
         self.k = k
         self.bm25_retriever = None
         self.faiss_db = None
+        self.chroma_db = None
         self.embedding_model = M3eEmbeddings()
         
         # if docs is not None:
@@ -32,6 +34,8 @@ class HybridRetriever:
         #     self._build_from_data_path(data_path)
         if faiss_db_path is not None:
             self._build_from_faiss(faiss_db_path)
+        elif chroma_db_path is not None:
+            self._build_from_chroma(chroma_db_path)
         else:
             raise ValueError("faiss_db_path must be provided")
         
@@ -44,6 +48,11 @@ class HybridRetriever:
         """Build indexes from FAISS database"""
         self.faiss_db = FAISS.load_local(faiss_db_path, embeddings=self.embedding_model, allow_dangerous_deserialization=True)
         # self.faiss_db.k = self.k
+    
+    def _build_from_chroma(self, chroma_db_path: str):
+        """Build indexes from Chroma database"""
+        self.chroma_db = Chroma(embedding_function=M3eEmbeddings(), persist_directory=chroma_db_path)
+
     
     def _build_from_conn(self, conn: sqlite3.Connection):
         """Build indexes from SQLite database"""
@@ -70,7 +79,7 @@ class HybridRetriever:
         self.bm25_retriever = BM25Retriever.from_documents(docs)
         self.bm25_retriever.k = self.k
     
-    def retrieve(self, query: str, alpha: float = 0.5) -> List[Document]:
+    def retrieve(self, query: str, alpha: float = 0.5, years: List[str] = None, categories: List[str] = None) -> List[Document]:
         """
         Retrieve documents using hybrid approach
         
@@ -86,19 +95,20 @@ class HybridRetriever:
         bm25_docs = self.bm25_retriever.invoke(bm25_query)
         bm25_scores = self.bm25_retriever.vectorizer.get_scores(bm25_query)
         
-        # FAISS retrieval
-        faiss_docs_with_scores = self.faiss_db.similarity_search_with_score(query, k=self.k)
-        faiss_docs = [doc for doc, score in faiss_docs_with_scores]
-        faiss_scores = [score for doc, score in faiss_docs_with_scores]
+        # Chroma retrieval
+        chroma_filter = chroma_filter(years, categories)
+        chroma_docs_with_scores = chroma_search(self.chroma_db, query, self.k, chroma_filter)
+        chroma_docs = [doc for doc, score in chroma_docs_with_scores]
+        chroma_scores = [score for doc, score in chroma_docs_with_scores]
         
         # Normalize scores
         bm25_scores_norm = self._normalize_scores(bm25_scores)
-        faiss_scores_norm = self._normalize_scores(faiss_scores)
+        chroma_scores_norm = self._normalize_scores(chroma_scores)
         
         # Combine results
         combined_results = self._combine_results(
             bm25_docs, bm25_scores_norm,
-            faiss_docs, faiss_scores_norm,
+            chroma_docs, chroma_scores_norm,
             alpha
         )
         

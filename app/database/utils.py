@@ -36,3 +36,30 @@ def insert_chunk_embedding(conn, chunk_id: str, embedding: bytes):
         VALUES (?, ?)
     ''', (chunk_id, embedding))
     conn.commit()
+    
+def chroma_filter(years, categories):
+    # if only one filter is given, use filter instead of where
+    chroma_filter = {}
+    if years:
+        if len(years) == 1:
+            chroma_filter["year"] = years[0]  # ChromaDB uses simple equality
+        else:
+            chroma_filter["year"] = {"$in": years}  # Keep $in for multiple values
+    if categories:
+        if len(categories) == 1:
+            chroma_filter["category"] = categories[0]  # ChromaDB uses simple equality
+        else:
+            chroma_filter["category"] = {"$in": categories}  # Keep $in for multiple values
+    return chroma_filter
+
+def chroma_search(chroma_db, query, k, chroma_filter):
+    if len(chroma_filter) == 1:
+        chroma_docs_with_scores = chroma_db.similarity_search_with_score(query, k=k,
+                                                                        filter=chroma_filter)
+    elif len(chroma_filter) == 0:
+        chroma_docs_with_scores = chroma_db.similarity_search_with_score(query, k=k)
+    else:
+        filter_list = [{key: value} for key, value in chroma_filter.items()]
+        chroma_docs_with_scores = chroma_db.similarity_search_with_score(query, k=k,
+                                                                        filter={"$and": filter_list})
+    return chroma_docs_with_scores

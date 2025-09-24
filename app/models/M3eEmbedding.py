@@ -1,6 +1,9 @@
 from sentence_transformers import SentenceTransformer
+from typing import List
+from langchain.schema import Document
+from langchain_core.embeddings import Embeddings
 
-class M3eEmbeddings:
+class M3eEmbeddings(Embeddings):
     def __init__(self):
         # 加载嵌入模型（如您之前的 m3e-base）
         # TODO: path of embedding model -> config
@@ -10,13 +13,20 @@ class M3eEmbeddings:
         self.model = SentenceTransformer(model_path)
         # self.model = SentenceTransformer("./models/m3e-base")
 
-    def embed_documents(self, documents):
+    def embed_query(self, text: str) -> List[float]:
         """
-        实现 LangChain 所需的 embed_documents 方法，返回文档的嵌入向量；
-        此处的document已经提取过page_content，输入其实就是string列表
+        实现 LangChain 所需的 embed_query 方法，返回查询文本的嵌入向量；
+        此处的text是string，返回List[float]
         """
-        embeddings = self.model.encode(documents)  # 使用 embed 方法生成嵌入向量
-        return embeddings
+        embedding = self.model.encode(text)
+        return embedding.tolist()  # Convert numpy array to list
+
+    def embed_documents(self, documents: List[str]) -> List[List[float]]:
+        """
+        实现 LangChain 所需的 embed_documents 方法，返回文档的嵌入向量
+        """
+        embeddings = self.model.encode(documents)  # 使用 encode 方法生成嵌入向量
+        return embeddings.tolist()  # Convert numpy array to list of lists
 
     def embed_text(self, text):
         """
@@ -24,7 +34,7 @@ class M3eEmbeddings:
         此处的text是string
         """
         embedding = self.model.encode(text)
-        return embedding
+        return embedding.tolist()  # Convert numpy array to list
 
     def __call__(self, text):
         """
