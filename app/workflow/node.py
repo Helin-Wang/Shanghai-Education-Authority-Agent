@@ -7,7 +7,7 @@ from models.BgeReranker import BgeReranker
 from models.HybridRetriever import HybridRetriever
 import os
 from workflow.state import AgentState
-from utils import extract_year, extract_category
+from workflow.utils import extract_year, extract_category
 
 # Initialize API configuration
 api_key = 'sk-hmqokjrhfszsquludqhbdzftggjriimfelvjjqwzccxnqxmn'
@@ -23,7 +23,7 @@ def retrieve_node(state: AgentState) -> AgentState:
     if "retriever" not in state or state["retriever"] is None:
         # Use hybrid retriever combining BM25 and FAISS
         hybrid_retriever = HybridRetriever(
-            chroma_db_path=state["chroma_db_path"],
+            faiss_db_path=state["faiss_db_path"],
             conn=state["conn"],
             k=6  # Retrieve more documents initially, will be filtered by reranker
         )
