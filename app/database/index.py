@@ -1,3 +1,4 @@
+from calendar import c
 from langchain_community.vectorstores import FAISS
 from langchain.schema import Document
 from typing import List
@@ -7,54 +8,52 @@ from langchain_community.vectorstores import Chroma
 
 def FTS5Index(conn):
     cursor = conn.cursor()
+    
+    # Create chunks_fts table
     cursor.execute('''
-        CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5(
-            chunk_id UNINDEXED,
-            seg, 
-            prefix='2,3,4',
-            tokenize="unicode61"
-        )
+        CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts
+        USING fts5(
+            chunk_tokens,
+            doc_title UNINDEXED,
+            category UNINDEXED,
+            year UNINDEXED,
+            content='chunks',
+            content_rowid='id',
+            tokenize="unicode61" -- 这里不做复杂分词，直接按空格切
+        );
     ''')
     
-    # Retrieve data
+    # Insert data into chunks_fts (only if table is empty)
     cursor.execute('''
-        SELECT chunk_id, text FROM chunks;
+        INSERT INTO chunks_fts(rowid, chunk_tokens, doc_title, category, year)
+        SELECT id, chunk_tokens, doc_title, category, year FROM chunks
+        WHERE NOT EXISTS (SELECT 1 FROM chunks_fts LIMIT 1);
     ''')
-    rows = cursor.fetchall()
     
-    # Tokenize and insert data
-    for row in rows:
-        chunk_id, text = row
-        seg = " ".join(jieba.cut(text))
-        cursor.execute('''
-            INSERT INTO chunks_fts (chunk_id, seg)
-            VALUES (?, ?);
-        ''', (chunk_id, seg))
+    # Create trigger to update chunks_fts when chunks is inserted
+    cursor.execute('''
+        CREATE TRIGGER IF NOT EXISTS chunks_ai AFTER INSERT ON chunks BEGIN
+            INSERT INTO chunks_fts(rowid, chunk_tokens, doc_title, category, year)
+            VALUES (new.id, new.chunk_tokens, new.doc_title, new.category, new.year);
+        END;
+    ''')
     
-    # Trigger
+    # Create trigger to update chunks_fts when chunks is deleted
     cursor.execute('''
-        CREATE TRIGGER IF NOT EXISTS chunks_fts_ai AFTER INSERT ON chunks
-        BEGIN
-            INSERT INTO chunks_fts (chunk_id, seg)
-            VALUES (NEW.chunk_id, NEW.seg);
+        CREATE TRIGGER IF NOT EXISTS chunks_ad AFTER DELETE ON chunks BEGIN
+            INSERT INTO chunks_fts(chunks_fts, rowid) VALUES('delete', old.id);
         END;
     ''')
+    
+    # Create trigger to update chunks_fts when chunks is updated
     cursor.execute('''
-        CREATE TRIGGER IF NOT EXISTS trg_chunks_ad AFTER DELETE ON chunks BEGIN
-            INSERT INTO chunks_fts(chunks_fts, rowid, chunk_id, seg)
-            VALUES('delete', (SELECT rowid FROM chunks_fts WHERE chunk_id=old.chunk_id),
-                    old.chunk_id, old.seg);
+        CREATE TRIGGER IF NOT EXISTS chunks_au AFTER UPDATE ON chunks BEGIN
+            INSERT INTO chunks_fts(chunks_fts, rowid) VALUES('delete', old.id);
+            INSERT INTO chunks_fts(rowid, chunk_tokens, doc_title, category, year)
+            VALUES (new.id, new.chunk_tokens, new.doc_title, new.category, new.year);
         END;
     ''')
-    cursor.execute('''
-        CREATE TRIGGER IF NOT EXISTS trg_chunks_au AFTER UPDATE ON chunks BEGIN
-        INSERT INTO chunks_fts(chunks_fts, rowid, chunk_id, seg)
-        VALUES('delete', (SELECT rowid FROM chunks_fts WHERE chunk_id=old.chunk_id),
-                old.chunk_id, old.seg);
-        INSERT INTO chunks_fts(chunk_id, seg)
-        VALUES (new.chunk_id, new.seg);
-        END;
-    ''')
+    
     conn.commit()
 
 def bm25_search(conn, query: str):
@@ -63,22 +62,37 @@ def bm25_search(conn, query: str):
 
     cursor = conn.cursor()
     cursor.execute('''
-        SELECT c.chunk_id, c.doc_id, c.text, bm25(chunks_fts) AS score
+        SELECT
+        c.text,
+        c.doc_id,
+        c.doc_title,
+        c.doc_link,
+        c.category,
+        c.year,
+        bm25(chunks_fts) AS score
         FROM chunks_fts
-        JOIN chunk_metadata c USING(chunk_id)
-        JOIN chunks USING(chunk_id)
+        JOIN chunks c ON c.id = chunks_fts.rowid
         WHERE chunks_fts MATCH ?
-        ORDER BY score LIMIT ? 
+        ORDER BY score
+        LIMIT 20;
     ''', (query_seg,))
     rows = cursor.fetchall()
-    return rows
     
-def ChromaIndex(docs: List[Document], db_path: str):
-    embedding_model = M3eEmbeddings()
-    
-    # Build and saveChroma index
-    chroma_db = Chroma.from_documents(docs, embedding=embedding_model, persist_directory=db_path)
-    chroma_db.persist()
+    # convert to documents with proper metadata structure
+    docs = []
+    for row in rows:
+        doc = Document(
+            page_content=row[0],  # text
+            metadata={
+                'doc_id': row[1],
+                'doc_title': row[2], 
+                'doc_link': row[3],
+                'category': row[4],
+                'year': row[5]
+            }
+        )
+        docs.append([doc, row[6]])
+    return docs
 
 
 def FAISSIndex(docs: List[Document], db_path: str):

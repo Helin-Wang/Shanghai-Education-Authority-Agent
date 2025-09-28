@@ -9,6 +9,7 @@ import json
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 import sqlite3
 from database.utils import chroma_filter, chroma_search
+from database.index import bm25_search
 
 class HybridRetriever:
     """Hybrid retriever combining BM25 keyword search and FAISS semantic search"""
@@ -27,20 +28,17 @@ class HybridRetriever:
         self.faiss_db = None
         self.chroma_db = None
         self.embedding_model = M3eEmbeddings()
+        self.conn = None
         
-        # if docs is not None:
-        #     self._build_indexes(docs)
-        # elif data_path is not None:
-        #     self._build_from_data_path(data_path)
+        # FAISS
         if faiss_db_path is not None:
             self._build_from_faiss(faiss_db_path)
-        elif chroma_db_path is not None:
-            self._build_from_chroma(chroma_db_path)
         else:
             raise ValueError("faiss_db_path must be provided")
         
+        # BM25
         if conn is not None:
-            self._build_from_conn(conn)
+            self.conn = conn
         else:
             raise ValueError("conn must be provided")
     
@@ -92,23 +90,23 @@ class HybridRetriever:
         """
         # BM25 retrieval
         bm25_query = " ".join(jieba.cut(query))  # Chinese tokenization
-        bm25_docs = self.bm25_retriever.invoke(bm25_query)
-        bm25_scores = self.bm25_retriever.vectorizer.get_scores(bm25_query)
+        bm25_docs_with_scores = bm25_search(self.conn, bm25_query)
+        bm25_docs = [doc for doc, score in bm25_docs_with_scores]
+        bm25_scores = [score for doc, score in bm25_docs_with_scores]
         
-        # Chroma retrieval
-        chroma_filter = chroma_filter(years, categories)
-        chroma_docs_with_scores = chroma_search(self.chroma_db, query, self.k, chroma_filter)
-        chroma_docs = [doc for doc, score in chroma_docs_with_scores]
-        chroma_scores = [score for doc, score in chroma_docs_with_scores]
+        # FAISS retrieval
+        faiss_docs_with_scores = self.faiss_db.similarity_search_with_score(query, k=self.k)
+        faiss_docs = [doc for doc, score in faiss_docs_with_scores]
+        faiss_scores = [score for doc, score in faiss_docs_with_scores]
         
         # Normalize scores
         bm25_scores_norm = self._normalize_scores(bm25_scores)
-        chroma_scores_norm = self._normalize_scores(chroma_scores)
+        faiss_scores_norm = self._normalize_scores(faiss_scores)
         
         # Combine results
         combined_results = self._combine_results(
             bm25_docs, bm25_scores_norm,
-            chroma_docs, chroma_scores_norm,
+            faiss_docs, faiss_scores_norm,
             alpha
         )
         

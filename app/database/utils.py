@@ -1,5 +1,6 @@
 import hashlib
 import sqlite3
+import jieba
 
 def sha1_hex(text: str) -> str:
     return hashlib.sha256(text.encode('utf-8')).hexdigest()
@@ -12,31 +13,16 @@ def insert_document(conn, doc_id: str, title: str, link: str, year: str, categor
     ''', (doc_id, title, link, year, category, published_date, crawl_time, markdown))
     conn.commit()
     
-def insert_chunk(conn, chunk_id: str, text: str):
-    conn = sqlite3.connect('../data/shanghai_education_authority_agent.db')
+def insert_chunk(conn, chunk_id: str, text: str, doc_id: str, doc_title: str, doc_link: str, category: str, year: str):
     cursor = conn.cursor()
+    chunk_tokens = " ".join(jieba.cut(text))
     cursor.execute('''
-        INSERT INTO chunks (chunk_id, text)
-        VALUES (?, ?)
-    ''', (chunk_id, text))
+        INSERT INTO chunks (chunk_id, chunk_tokens, text, doc_id, doc_title, doc_link, category, year)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (chunk_id, chunk_tokens, text, doc_id, doc_title, doc_link, category, year))
     conn.commit()
 
-def insert_chunk_metadata(conn, chunk_id: str, doc_id: str, category: str, year: str):
-    cursor = conn.cursor()
-    cursor.execute('''
-        INSERT INTO chunk_metadata (chunk_id, doc_id, category, year)
-        VALUES (?, ?, ?, ?)
-    ''', (chunk_id, doc_id, category, year))
-    conn.commit()
 
-def insert_chunk_embedding(conn, chunk_id: str, embedding: bytes):
-    cursor = conn.cursor()
-    cursor.execute('''
-        INSERT INTO chunk_embedding (chunk_id, embedding)
-        VALUES (?, ?)
-    ''', (chunk_id, embedding))
-    conn.commit()
-    
 def chroma_filter(years, categories):
     # if only one filter is given, use filter instead of where
     chroma_filter = {}

@@ -3,14 +3,13 @@ from tqdm import tqdm
 from doc.utils import parse_markdown
 import argparse
 from doc.chunk import chunk_to_dict
-from database.init import init_table, create_view
+from database.init import init_table
 import sqlite3
-from database.utils import insert_chunk, insert_document, insert_chunk_metadata
+from database.utils import insert_chunk, insert_document
 from models.M3eEmbedding import M3eEmbeddings
 import os
 from langchain.schema import Document
 from database.index import FAISSIndex, FTS5Index
-from database.index import ChromaIndex
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -21,6 +20,18 @@ if __name__ == "__main__":
     filepath = args.filepath
     with open(filepath, "r", encoding="utf-8") as f:
         data = json.load(f)
+    
+    # Redefine categories
+    for index in range(len(data)):
+        if '中考中招' in data[index]['category']:
+            data[index]['category'] = '中考中招'
+        elif '自学考试' in data[index]['category']:
+            data[index]['category'] = '自学考试'
+        else:
+            data[index]['category'] = '_'.join(data[index]['category'])
+    
+    with open(filepath, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=4)
     
     db_path = '../data/shanghai_education_authority_agent.db'
     if os.path.exists(db_path):
@@ -34,7 +45,7 @@ if __name__ == "__main__":
     print("Building Document Table...")
     conn = sqlite3.connect(db_path)
     for item in data:
-        insert_document(conn, item['doc_id'], item['title'], item['link'], item['year'], ";".join(item['category']), item['published_date'], item['crawl_time'], item['markdown'])
+        insert_document(conn, item['doc_id'], item['title'], item['link'], item['year'], item['category'], item['published_date'], item['crawl_time'], item['markdown'])
     
     # Split into chunks
     print("Building Chunk-related Table")
@@ -58,22 +69,15 @@ if __name__ == "__main__":
         
     # Build Chunk-related Tables
     for chunk in processed_chunks:
-        insert_chunk(conn, chunk['metadata']['chunk_index'], chunk['text'])
-        insert_chunk_metadata(conn, chunk['metadata']['chunk_index'], chunk['metadata']['doc_id'], ";".join(chunk['metadata']['category']), chunk['metadata']['year'])
-        
-    create_view(db_path)
+        insert_chunk(conn, chunk['metadata']['chunk_index'], chunk['text'], chunk['metadata']['doc_id'], chunk['metadata']['doc_title'], chunk['metadata']['doc_link'], chunk['metadata']['category'], chunk['metadata']['year'])
     
-    with open("../data/v1_chunks.json", "r", encoding="utf-8") as f:
+    with open(args.output_chunks_filepath, "r", encoding="utf-8") as f:
         processed_chunks = json.load(f)
     
-    # Build Langchain Documents, use ';'.join(chunk['metadata']['category']) as category
+    # Build FAISS Index
     langchain_documents = [Document(page_content=chunk['text'], metadata=chunk['metadata']) for chunk in processed_chunks]
-    for i in range(len(langchain_documents)):
-        langchain_documents[i].metadata['category'] = ';'.join(langchain_documents[i].metadata['category'])
+    FAISSIndex(langchain_documents, "../data/faiss_index")
     
-    # Build Chroma Index
-    ChromaIndex(langchain_documents, "../data/chromadb_index")
-    
-    # Build FTS5 Index
+    # Build BM25 Index
     FTS5Index(conn)
     conn.close()

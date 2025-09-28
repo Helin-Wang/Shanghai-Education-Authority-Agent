@@ -1,5 +1,5 @@
 import os
-from app.workflow.graph import workflow_app
+from workflow.graph import workflow_app
 import sqlite3
 # Initialize API configuration
 api_key_r1 = 'ebe4d4b6-00ae-4ea7-9890-9356d6a29570'
