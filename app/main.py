@@ -30,7 +30,7 @@ def run_langgraph_workflow(query: str):
 
 if __name__ == "__main__":
     # Example query
-    query = "什么时候公布学业水平考试的成绩？"
+    query = "什么时候公布高中学业水平考试的成绩？"
     
     print(f"Running LangGraph workflow for query: {query}")
     print("=" * 50)

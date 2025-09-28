@@ -37,7 +37,7 @@ def retrieve_node(state: AgentState) -> AgentState:
     
     # Retrieve documents using hybrid approach
     retriever = state["retriever"]
-    docs = retriever.retrieve(query, alpha=0.1)  # 0.1 for BM25, 0.9 for FAISS
+    docs = retriever.retrieve(query, alpha=0.1, years=years, categories=categories)  # 0.1 for BM25, 0.9 for FAISS
     state["docs"] = docs
     
     return state

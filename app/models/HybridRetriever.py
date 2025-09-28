@@ -88,14 +88,28 @@ class HybridRetriever:
         Returns:
             List of retrieved documents
         """
+        def filter_docs(docs, years=None, categories=None):
+            def valid(doc):
+                if years and doc.metadata.get("year") not in years:
+                    return False
+                if categories and doc.metadata.get("category") not in categories:
+                    return False
+                return True
+
+            return [(doc, score) for doc, score in docs if valid(doc)]
+
         # BM25 retrieval
         bm25_query = " ".join(jieba.cut(query))  # Chinese tokenization
         bm25_docs_with_scores = bm25_search(self.conn, bm25_query)
+        # filter by years and categories
+        bm25_docs_with_scores = filter_docs(bm25_docs_with_scores, years, categories)
         bm25_docs = [doc for doc, score in bm25_docs_with_scores]
         bm25_scores = [score for doc, score in bm25_docs_with_scores]
         
         # FAISS retrieval
         faiss_docs_with_scores = self.faiss_db.similarity_search_with_score(query, k=self.k)
+        # filter by years and categories
+        faiss_docs_with_scores = filter_docs(faiss_docs_with_scores, years, categories)
         faiss_docs = [doc for doc, score in faiss_docs_with_scores]
         faiss_scores = [score for doc, score in faiss_docs_with_scores]
         
