@@ -126,8 +126,8 @@ async def crawl_all_subpage_list_pages(base_url: str, type1: str, type2: str, ma
         crawled_data.extend(results)
         
         # Early termination
-        if len(results) < 10:
-            break
+        # if len(results) < 10:
+        #     break
     
     return [item for sublist in crawled_data for item in sublist]
 
