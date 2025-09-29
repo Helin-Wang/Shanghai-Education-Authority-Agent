@@ -37,15 +37,15 @@ if __name__ == "__main__":
     
     # Run the workflow
     result = run_langgraph_workflow(query)
+    print(result["history"])
+    # print("Retrieved Documents:")
+    # for i, doc in enumerate(result["docs"]):
+    #     print(f"Document {i+1}:")
+    #     print(doc)
+    #     # print(f"  Title: {doc.metadata.get('title', 'N/A')}")
+    #     # print(f"  Year: {doc.metadata.get('year', 'N/A')}")
+    #     # print(f"  Content preview: {doc.page_content[:100]}...")
+    #     print()
     
-    print("Retrieved Documents:")
-    for i, doc in enumerate(result["docs"]):
-        print(f"Document {i+1}:")
-        print(doc)
-        # print(f"  Title: {doc.metadata.get('title', 'N/A')}")
-        # print(f"  Year: {doc.metadata.get('year', 'N/A')}")
-        # print(f"  Content preview: {doc.page_content[:100]}...")
-        print()
-    
-    print("Generated Answer:")
-    print(result["answer"])
+    # print("Generated Answer:")
+    # print(result["answer"])

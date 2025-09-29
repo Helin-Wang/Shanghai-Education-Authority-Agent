@@ -8,12 +8,20 @@ from models.HybridRetriever import HybridRetriever
 import os
 from workflow.state import AgentState
 from workflow.utils import extract_year, extract_category
+from langchain_core.messages import HumanMessage, AIMessage
 
 # Initialize API configuration
 api_key = 'sk-hmqokjrhfszsquludqhbdzftggjriimfelvjjqwzccxnqxmn'
 os.environ["OPENAI_API_BASE"] = 'https://api.siliconflow.cn/v1'
 os.environ["OPENAI_API_KEY"] = api_key
 
+def entry_node(state: AgentState) -> AgentState:
+    query = state["query"]
+    # Add query into history
+    state["history"].append(
+        HumanMessage(content=query)
+    )
+    return state
 
 def retrieve_node(state: AgentState) -> AgentState:
     """根据查询从不同数据库中检索相关文档 - 使用混合检索方法"""
@@ -91,5 +99,8 @@ def generate_node(state: AgentState) -> AgentState:
     llm = state["llm"]
     response = llm.invoke(prompt)
     state["answer"] = response.content
+    state["history"].append(
+        AIMessage(content=response.content)
+    )
     
     return state
