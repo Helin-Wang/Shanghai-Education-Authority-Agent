@@ -32,7 +32,7 @@ def retrieve_node(state: AgentState) -> AgentState:
     # Extract year and category from query
     years = extract_year(query)
     state["years"] = years
-    categories = extract_category(query)
+    categories = extract_category(query, state["llm"])
     state["categories"] = categories
     
     # Retrieve documents using hybrid approach

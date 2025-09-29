@@ -78,6 +78,12 @@ def extract_year(query: str) -> list[str]:
         if year_str and year_str.isdigit():
             add_year(int(year_str))
 
+    # If no year is found, use recent 3 years
+    if not found:
+        add_year(current_year)
+        add_year(current_year - 1)
+        add_year(current_year - 2)
+
     return found
 
 def extract_year_using_LLM(query: str, llm: ChatOpenAI) -> List[str]:
@@ -155,7 +161,7 @@ def extract_year_using_LLM(query: str, llm: ChatOpenAI) -> List[str]:
         print(f"Error: {e}")
         return []
 
-def extract_examcategory_using_LLM(query: str, llm: ChatOpenAI) -> List[str]:
+def extract_category_using_LLM(query: str, llm: ChatOpenAI) -> List[str]:
     """
     Extract exam category information from user query(in Chinese) using LLM.
     
@@ -310,7 +316,7 @@ def test_extract_year():
     print(f"Test Results: {passed} passed, {failed} failed")
     return passed, failed
 
-def extract_category(query: str) -> list[str]:
+def extract_category(query: str, llm: ChatOpenAI) -> list[str]:
     """
     Extract all category information from the user query.
     """
@@ -320,5 +326,9 @@ def extract_category(query: str) -> list[str]:
             if alias in query:  # 子串匹配
                 result.append(standard_name)
                 break  # 已经命中一个别名，跳过这个标准词的其他别名
+            
+    # If no category is found, use LLM to extract
+    if not result:
+        result = extract_category_using_LLM(query, llm)
     return result
 
