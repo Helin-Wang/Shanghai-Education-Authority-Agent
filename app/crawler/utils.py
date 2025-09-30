@@ -254,6 +254,9 @@ def convert_html_to_markdown(html: str) -> str:
     return markdown_text
 
 def postprocess_content(data: List[dict]) -> List[dict]:
+    # Remove 404 Not Found
+    data = [item for item in data if '404 Not Found' not in item['markdown']]
+    
     for item in tqdm(data, desc="Converting HTML to Markdown"):
         item['doc_id'] = sha1_hex(item['link'])
         item['markdown'] = convert_html_to_markdown(item['content'])
