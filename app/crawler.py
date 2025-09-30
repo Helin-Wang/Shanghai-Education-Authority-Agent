@@ -35,13 +35,8 @@ if __name__ == '__main__':
         df = pd.DataFrame(content_src)
         df.to_csv("./config/content_src.csv", index=False, encoding="utf-8")
     
-    
-    # Crawl content pages
-    start_page = min(start_page, len(content_src))
-    end_page = min(end_page, len(content_src))
-    
-    data = asyncio.run(crawl_contentpage(content_src[start_page:end_page]))
+    data = asyncio.run(crawl_contentpage(content_src))
     data = postprocess_content(data)
-    with open(f"../data/v0_content_{start_page}_{end_page}.json", "w", encoding="utf-8") as f:
+    with open(f"../data/v1_content.json", "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=4)
     
