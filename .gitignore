@@ -9,7 +9,7 @@
 
 *.slurm
 
-*.DS_Store
+*/.DS_Store
 
 *.ipynb
 
@@ -21,3 +21,5 @@ app/models/bge-reranker-base/*
 */faiss_index/*
 
 */temp.py
+
+*.pyc
