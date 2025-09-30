@@ -13,22 +13,13 @@ from database.index import FAISSIndex, FTS5Index
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--filepath", type=str, default="../data/v0_content.json")
+    parser.add_argument("--filepath", type=str, default="../data/v1_content.json")
     parser.add_argument("--output_chunks_filepath", type=str, default="../data/v1_chunks.json")
     args = parser.parse_args()
     
     filepath = args.filepath
     with open(filepath, "r", encoding="utf-8") as f:
         data = json.load(f)
-    
-    # Redefine categories
-    for index in range(len(data)):
-        if '中考中招' in data[index]['category']:
-            data[index]['category'] = '中考中招'
-        elif '自学考试' in data[index]['category']:
-            data[index]['category'] = '自学考试'
-        else:
-            data[index]['category'] = '_'.join(data[index]['category'])
     
     with open(filepath, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=4)
