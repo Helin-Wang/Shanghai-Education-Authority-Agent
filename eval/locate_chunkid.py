@@ -10,6 +10,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.append(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'app'))
 from models.HybridRetriever import HybridRetriever
 import sqlite3
+import argparse
 
 api_key_r1 = 'sk-hmqokjrhfszsquludqhbdzftggjriimfelvjjqwzccxnqxmn'
 llm_client = OpenAI(
@@ -82,6 +83,13 @@ def check_relevance(chunk_text, question, answer):
     return response.choices[0].message.content
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--start_index", type=int, default=0)
+    parser.add_argument("--end_index", type=int, default=-1)
+    args = parser.parse_args()
+    start_index = args.start_index
+    end_index = args.end_index
+    
     # 1. Load chunks
     with open("../data/v1_chunks.json", "r") as f:
         chunks = json.load(f)
@@ -89,6 +97,7 @@ if __name__ == "__main__":
         
     # 2. Use HybridRetriever to get the relevant chunks
     if not os.path.exists("./data/official_faq_with_relevant_chunks_by_hybridretriever.csv"):
+        print("Building relevant chunks by HybridRetriever...")
         # load the official faq
         officialfaq_pd = pd.read_csv("./data/official_faq.csv")
         print("Total Number of OfficialQA Pairs:", len(officialfaq_pd))
@@ -133,6 +142,8 @@ if __name__ == "__main__":
     
     # Convert relevant_chunks col to list using ast.literal_eval
     officialfaq_pd['relevant_chunks'] = officialfaq_pd['relevant_chunks'].apply(ast.literal_eval)
+    end_index = len(officialfaq_pd) if end_index == -1 else end_index
+    officialfaq_pd = officialfaq_pd[start_index:end_index]
     
     relevant_chunks_list_verified_with_llm = []
     for index, row in tqdm(officialfaq_pd.iterrows(), total=len(officialfaq_pd)):
@@ -148,4 +159,4 @@ if __name__ == "__main__":
         relevant_chunks_list_verified_with_llm.append(relevant_chunks_id_list_verified_with_llm)
     
     officialfaq_pd['relevant_chunks_verified_with_llm'] = relevant_chunks_list_verified_with_llm
-    officialfaq_pd.to_csv("./data/official_faq_with_relevant_chunks_relevance_by_llm.csv", index=False)
+    officialfaq_pd.to_csv(f"./data/official_faq_with_relevant_chunks_relevance_by_llm_{start_index}_{end_index}.csv", index=False)
