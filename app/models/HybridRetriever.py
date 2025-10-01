@@ -65,7 +65,7 @@ class HybridRetriever:
         docs = []
         for chunk_id, text, doc_id, doc_title, doc_link, category, year in rows:
             md = {
-                "chunk_id": chunk_id,
+                "chunk_index": chunk_id,
                 "doc_id": doc_id,
                 "doc_title": doc_title,
                 "doc_link": doc_link,
@@ -233,8 +233,8 @@ class HybridRetriever:
         return result_docs
     
     def _get_doc_key(self, doc: Document) -> str:
-        """Generate a unique key for a document"""
-        return f"{doc.page_content[:100]}_{doc.metadata.get('source', '')}"
+        """Return chunk_index"""
+        return doc.metadata.get('chunk_index', '')
     
     def _find_doc_by_key(self, doc_key: str, docs: List[Document]) -> Document:
         """Find a document by its key"""

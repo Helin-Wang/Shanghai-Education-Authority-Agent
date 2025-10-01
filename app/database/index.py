@@ -82,7 +82,21 @@ def bm25_search(conn, query: str):
     if not tokens:
         return []
     
-    query_seg = " ".join(tokens)
+    # Sanitize query for FTS5 - escape special characters that cause issues
+    def sanitize_fts5_query(text):
+        # Replace problematic characters that FTS5 interprets as operators
+        # - (hyphen) is interpreted as column reference
+        # : (colon) can cause issues in some contexts
+        sanitized = text.replace('-', ' ').replace(':', ' ')
+        # Remove other potentially problematic characters
+        sanitized = sanitized.replace('(', ' ').replace(')', ' ')
+        sanitized = sanitized.replace('[', ' ').replace(']', ' ')
+        sanitized = sanitized.replace('{', ' ').replace('}', ' ')
+        # Clean up multiple spaces
+        sanitized = ' '.join(sanitized.split())
+        return sanitized
+    
+    query_seg = " ".join([sanitize_fts5_query(token) for token in tokens])
     
     cursor = None
     try:
