@@ -1,5 +1,6 @@
 import json
 import pandas as pd
+import ast
 from openai import OpenAI
 from tqdm import tqdm
 import os
@@ -41,12 +42,12 @@ CATEGORY_MAPPING = {
 DOCUMENT_RELEVANCE_SYSTEM_PROMPT = "You are an expert assistant for a Retrieval-Augmented Generation (RAG) system used in the Shanghai Education Examination Authority's Q&A assistant."
 DOCUMENT_RELEVANCE_USER_PROMPT_TEMPLATE = """
 ### Task
-Given a QAPair (with a Question in Chinese and its corresponding Answer in Chinese) and a document title (also in Chinese), determine whether the document could reasonably contain the information needed to answer the Question. 
-- If the document title is relevant and could lead to the correct Answer, return `true`.
-- If the document title is irrelevant or unlikely to help answer the Question, return `false`.
+Given a QAPair (with a Question in Chinese and its corresponding Answer in Chinese) and a document text(also in Chinese), determine whether the document could reasonably contain the information needed to answer the Question. 
+- If the document text is relevant and could lead to the correct Answer, return `true`.
+- If the document text is irrelevant or unlikely to help answer the Question, return `false`.
 
 ### Important Notes
-1. All inputs (Question, Answer, Document Title) will be in **Chinese**. Do not translate them.  
+1. All inputs (Question, Answer, Document Text) will be in **Chinese**. Do not translate them.  
 2. The system is focused on the **Shanghai Education Examination Authority** domain (e.g., exams, policies, admissions, notices, official information).  
 3. Your output must be strictly one of the following:
    - `True`
@@ -56,17 +57,17 @@ Given a QAPair (with a Question in Chinese and its corresponding Answer in Chine
 ### Input
 Question: {question}
 Answer: {answer}
-Document Title: {title}
+Document Text: {text}
 """
 DOCUMENT_RELEVANCE_OUTPUT_SCHEMA = {
     "type": "boolean"
 }
 
 
-def check_relevance_of_title(title, question, answer):
-    # Use llm to check the relevance of title
+def check_relevance(chunk_text, question, answer):
+    # Use llm to check the relevance between chunk and qa pair
     system_prompt = DOCUMENT_RELEVANCE_SYSTEM_PROMPT
-    user_prompt = DOCUMENT_RELEVANCE_USER_PROMPT_TEMPLATE.format(title=title, question=question, answer=answer)
+    user_prompt = DOCUMENT_RELEVANCE_USER_PROMPT_TEMPLATE.format(text=chunk_text, question=question, answer=answer)
     response = llm_client.chat.completions.create(
         model="Qwen/Qwen2.5-7B-Instruct",
         messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}],
@@ -78,46 +79,75 @@ def check_relevance_of_title(title, question, answer):
             }
         }
     )
+    result = json.loads(response.choices[0].message.content)
+    print(type(result))
     return response.choices[0].message.content
 
 if __name__ == "__main__":
-    # 1. Load relevant data
-    
-    # load the official faq
-    officialfaq_pd = pd.read_csv("./data/official_faq.csv")
-    print("Total Number of OfficialQA Pairs:", len(officialfaq_pd))
-    
-    # Map the category to the document category
-    category_list = []
-    for index, row in officialfaq_pd.iterrows():
-        category = CATEGORY_MAPPING[row['部分'] + '_' + row['考试类型']]
-        category_list.append(category)
-    officialfaq_pd['category'] = category_list
-    
-    # load the chunks
+    # 1. Load chunks
     with open("../data/v1_chunks.json", "r") as f:
         chunks = json.load(f)
         
-    # 2. HybridRetriever to get the relevant chunks
-    hybrid_retriever = HybridRetriever(
-        faiss_db_path="../data/faiss_index",
-        conn=sqlite3.connect("../data/shanghai_education_authority_agent.db"),
-        k=10
-    )
         
-    relevant_chunks_list = []
-    # Check the relevance between documents and qa pairs
+    # 2. Use HybridRetriever to get the relevant chunks
+    if not os.path.exists("./data/official_faq_with_relevant_chunks_by_hybridretriever.csv"):
+        # load the official faq
+        officialfaq_pd = pd.read_csv("./data/official_faq.csv")
+        print("Total Number of OfficialQA Pairs:", len(officialfaq_pd))
+        
+        # Map the category to the document category
+        category_list = []
+        for index, row in officialfaq_pd.iterrows():
+            category = CATEGORY_MAPPING[row['部分'] + '_' + row['考试类型']]
+            category_list.append(category)
+        officialfaq_pd['category'] = category_list
+        
+        hybrid_retriever = HybridRetriever(
+            faiss_db_path="../data/faiss_index",
+            conn=sqlite3.connect("../data/shanghai_education_authority_agent.db"),
+            k=10
+        )
+            
+        relevant_chunks_list = []
+        # Check the relevance between documents and qa pairs
+        for index, row in tqdm(officialfaq_pd.iterrows(), total=len(officialfaq_pd)):
+            category = row['category']
+            question = row['问题']
+            answer = row['答案']
+            
+            # HybridRetriever to get the relevant chunks
+            query = str(question)+"\n"+str(answer)
+            relevant_chunks = hybrid_retriever.retrieve(query, categories=[category])
+            relevant_chunks_list.append([chunk.metadata['chunk_index'] for chunk in relevant_chunks])
+
+        officialfaq_pd['relevant_chunks'] = relevant_chunks_list
+        officialfaq_pd.to_csv("./data/official_faq_with_relevant_chunks_by_hybridretriever.csv", index=False)
+    
+    else:
+        # load officialfaq_pd with relevant_chunks
+        officialfaq_pd = pd.read_csv("./data/official_faq_with_relevant_chunks_by_hybridretriever.csv")
+    
+    
+    # 3. Use llm to check the relevance of the chunks
+    
+    # Reshape the chunks
+    chunks_dict = {chunk['metadata']['chunk_index']: chunk for chunk in chunks}
+    
+    # Convert relevant_chunks col to list using ast.literal_eval
+    officialfaq_pd['relevant_chunks'] = officialfaq_pd['relevant_chunks'].apply(ast.literal_eval)
+    
+    relevant_chunks_list_verified_with_llm = []
     for index, row in tqdm(officialfaq_pd.iterrows(), total=len(officialfaq_pd)):
-        category = row['category']
         question = row['问题']
         answer = row['答案']
-        
-        # HybridRetriever to get the relevant chunks
-        query = str(question)+"\n"+str(answer)
-        relevant_chunks = hybrid_retriever.retrieve(query, categories=[category])
-        relevant_chunks_list.append([chunk.metadata['chunk_index'] for chunk in relevant_chunks])
-
+        relevant_chunks_id_list = row['relevant_chunks']
+        relevant_chunks_id_list_verified_with_llm = []
+        for chunk_id in relevant_chunks_id_list:
+            # Find the chunk text
+            chunk_text = chunks_dict[chunk_id]['text']
+            if check_relevance(chunk_text, question, answer):
+                relevant_chunks_id_list_verified_with_llm.append(chunk_id)
+        relevant_chunks_list_verified_with_llm.append(relevant_chunks_id_list_verified_with_llm)
     
-    officialfaq_pd['relevant_chunks'] = relevant_chunks_list
-    officialfaq_pd.to_csv("./data/official_faq_with_relevant_chunks_by_hybridretriever.csv", index=False)
-  
+    officialfaq_pd['relevant_chunks_verified_with_llm'] = relevant_chunks_list_verified_with_llm
+    officialfaq_pd.to_csv("./data/official_faq_with_relevant_chunks_relevance_by_llm.csv", index=False)
