@@ -4,6 +4,7 @@ from langchain.schema import Document
 from typing import List
 from models.M3eEmbedding import M3eEmbeddings
 import jieba
+import sqlite3
 from langchain_community.vectorstores import Chroma
 
 def FTS5Index(conn):
@@ -54,45 +55,125 @@ def FTS5Index(conn):
         END;
     ''')
     
+    # Verify FTS5 index integrity and rebuild if necessary
+    try:
+        cursor.execute('''
+            SELECT COUNT(*) FROM chunks_fts WHERE chunks_fts MATCH '测试'
+        ''')
+        # If this query succeeds, the index is working
+        print("FTS5 index verified successfully")
+    except Exception as e:
+        print(f"FTS5 index corruption detected: {e}")
+        print("Rebuilding FTS5 index...")
+        cursor.execute('INSERT INTO chunks_fts(chunks_fts) VALUES("rebuild")')
+        print("FTS5 index rebuilt successfully")
+    
     conn.commit()
 
 def bm25_search(conn, query: str):
-    # Tokenize query
-    query_seg = " ".join(jieba.cut(query))
-
-    cursor = conn.cursor()
-    cursor.execute('''
-        SELECT
-        c.text,
-        c.doc_id,
-        c.doc_title,
-        c.doc_link,
-        c.category,
-        c.year,
-        bm25(chunks_fts) AS score
-        FROM chunks_fts
-        JOIN chunks c ON c.id = chunks_fts.rowid
-        WHERE chunks_fts MATCH ?
-        ORDER BY score
-        LIMIT 20;
-    ''', (query_seg,))
-    rows = cursor.fetchall()
+    # Input validation
+    if not conn:
+        raise ValueError("Database connection is required")
+    if not query or not query.strip():
+        return []
     
-    # convert to documents with proper metadata structure
-    docs = []
-    for row in rows:
-        doc = Document(
-            page_content=row[0],  # text
-            metadata={
-                'doc_id': row[1],
-                'doc_title': row[2], 
-                'doc_link': row[3],
-                'category': row[4],
-                'year': row[5]
-            }
-        )
-        docs.append([doc, row[6]])
-    return docs
+    # Tokenize query
+    tokens = [t.strip() for t in jieba.cut(query) if t.strip()]
+    if not tokens:
+        return []
+    
+    query_seg = " ".join(tokens)
+    
+    cursor = None
+    try:
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT
+            c.text,
+            c.doc_id,
+            c.doc_title,
+            c.doc_link,
+            c.category,
+            c.year,
+            bm25(chunks_fts) AS score
+            FROM chunks_fts
+            JOIN chunks c ON c.id = chunks_fts.rowid
+            WHERE chunks_fts MATCH ?
+            ORDER BY score
+            LIMIT 20;
+        ''', (query_seg,))
+        rows = cursor.fetchall()
+        
+        # convert to documents with proper metadata structure
+        docs = []
+        for row in rows:
+            if row[0]:  # Check if text is not None
+                doc = Document(
+                    page_content=row[0],  # text
+                    metadata={
+                        'doc_id': row[1],
+                        'doc_title': row[2], 
+                        'doc_link': row[3],
+                        'category': row[4],
+                        'year': row[5]
+                    }
+                )
+                docs.append([doc, row[6]])
+        return docs
+        
+    except sqlite3.OperationalError as e:
+        if "no such column" in str(e) or "database disk image is malformed" in str(e):
+            print(f"FTS5 index corruption detected: {e}")
+            print("Attempting to rebuild FTS5 index...")
+            try:
+                cursor.execute('INSERT INTO chunks_fts(chunks_fts) VALUES("rebuild")')
+                conn.commit()
+                print("FTS5 index rebuilt successfully, retrying search...")
+                # Retry the search after rebuild
+                cursor.execute('''
+                    SELECT
+                    c.text,
+                    c.doc_id,
+                    c.doc_title,
+                    c.doc_link,
+                    c.category,
+                    c.year,
+                    bm25(chunks_fts) AS score
+                    FROM chunks_fts
+                    JOIN chunks c ON c.id = chunks_fts.rowid
+                    WHERE chunks_fts MATCH ?
+                    ORDER BY score
+                    LIMIT 20;
+                ''', (query_seg,))
+                rows = cursor.fetchall()
+                
+                docs = []
+                for row in rows:
+                    if row[0]:
+                        doc = Document(
+                            page_content=row[0],
+                            metadata={
+                                'doc_id': row[1],
+                                'doc_title': row[2], 
+                                'doc_link': row[3],
+                                'category': row[4],
+                                'year': row[5]
+                            }
+                        )
+                        docs.append([doc, row[6]])
+                return docs
+            except Exception as rebuild_error:
+                print(f"Failed to rebuild FTS5 index: {rebuild_error}")
+                return []
+        else:
+            print(f"Database error in bm25_search: {e}")
+            return []
+    except Exception as e:
+        print(f"Unexpected error in bm25_search: {e}")
+        return []
+    finally:
+        if cursor:
+            cursor.close()
 
 
 def FAISSIndex(docs: List[Document], db_path: str):

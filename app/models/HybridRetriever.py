@@ -99,8 +99,7 @@ class HybridRetriever:
             return [(doc, score) for doc, score in docs if valid(doc)]
 
         # BM25 retrieval
-        bm25_query = " ".join(jieba.cut(query))  # Chinese tokenization
-        bm25_docs_with_scores = bm25_search(self.conn, bm25_query)
+        bm25_docs_with_scores = bm25_search(self.conn, query)
         # filter by years and categories
         bm25_docs_with_scores = filter_docs(bm25_docs_with_scores, years, categories)
         bm25_docs = [doc for doc, score in bm25_docs_with_scores]
