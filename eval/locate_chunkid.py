@@ -79,8 +79,6 @@ def check_relevance(chunk_text, question, answer):
             }
         }
     )
-    result = json.loads(response.choices[0].message.content)
-    print(type(result))
     return response.choices[0].message.content
 
 if __name__ == "__main__":
