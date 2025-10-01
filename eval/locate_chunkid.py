@@ -113,7 +113,7 @@ if __name__ == "__main__":
         answer = row['答案']
         
         # HybridRetriever to get the relevant chunks
-        query = question+"\n"+answer
+        query = str(question)+"\n"+str(answer)
         relevant_chunks = hybrid_retriever.retrieve(query, categories=[category])
         relevant_chunks_list.append([chunk.metadata['chunk_index'] for chunk in relevant_chunks])
 
