@@ -44,16 +44,23 @@ DOCUMENT_RELEVANCE_SYSTEM_PROMPT = "You are an expert assistant for a Retrieval-
 DOCUMENT_RELEVANCE_USER_PROMPT_TEMPLATE = """
 ### Task
 Given a QAPair (with a Question in Chinese and its corresponding Answer in Chinese) and a document text(also in Chinese), determine whether the document could reasonably contain the information needed to answer the Question. 
-- If the document text is relevant and could lead to the correct Answer, return `true`.
-- If the document text is irrelevant or unlikely to help answer the Question, return `false`.
+
+### Requirements
+1. Judge **document relevance**
+    - If the document text is relevant and could lead to the correct Answer, return `true`.
+    - If the document text is irrelevant or unlikely to help answer the Question, return `false`.
+
+2. Provide a **rationale** in Chinese explaining why you made this judgment.
+
+3. Provide a **confidence score** between 0 and 1 indicating how confident you are in your judgment.
 
 ### Important Notes
 1. All inputs (Question, Answer, Document Text) will be in **Chinese**. Do not translate them.  
 2. The system is focused on the **Shanghai Education Examination Authority** domain (e.g., exams, policies, admissions, notices, official information).  
-3. Your output must be strictly one of the following:
-   - `True`
-   - `False`
-   Nothing else. No explanations. No additional words.
+3. Output must be a **STRICT JSON** with the following structure:
+    - `"relevance"`: boolean, indicating whether the document is relevant
+    - `"rationale"`: string, a concise Chinese explanation of the relevance
+    - `"confidence"`: float, confidence score between 0 and 1
 
 ### Input
 Question: {question}
@@ -61,7 +68,13 @@ Answer: {answer}
 Document Text: {text}
 """
 DOCUMENT_RELEVANCE_OUTPUT_SCHEMA = {
-    "type": "boolean"
+    "type": "object",
+    "properties": {
+        "relevance": {"type": "boolean"},
+        "rationale": {"type": "string"},
+        "confidence": {"type": "number", "minimum": 0, "maximum": 1}
+    },
+    "required": ["relevance", "rationale", "confidence"]
 }
 
 
@@ -80,7 +93,9 @@ def check_relevance(chunk_text, question, answer):
             }
         }
     )
-    return response.choices[0].message.content
+    # load the response
+    result = json.loads(response.choices[0].message.content)
+    return result
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -146,17 +161,26 @@ if __name__ == "__main__":
     officialfaq_pd = officialfaq_pd[start_index:end_index]
     
     relevant_chunks_list_verified_with_llm = []
-    for index, row in tqdm(officialfaq_pd.iterrows(), total=len(officialfaq_pd)):
-        question = row['问题']
-        answer = row['答案']
-        relevant_chunks_id_list = row['relevant_chunks']
-        relevant_chunks_id_list_verified_with_llm = []
-        for chunk_id in relevant_chunks_id_list:
-            # Find the chunk text
-            chunk_text = chunks_dict[chunk_id]['text']
-            if check_relevance(chunk_text, question, answer):
-                relevant_chunks_id_list_verified_with_llm.append(chunk_id)
-        relevant_chunks_list_verified_with_llm.append(relevant_chunks_id_list_verified_with_llm)
-    
-    officialfaq_pd['relevant_chunks_verified_with_llm'] = relevant_chunks_list_verified_with_llm
-    officialfaq_pd.to_csv(f"./data/official_faq_with_relevant_chunks_relevance_by_llm_{start_index}_{end_index}.csv", index=False)
+    try:
+        for index, row in tqdm(officialfaq_pd.iterrows(), total=len(officialfaq_pd)):
+            question = row['问题']
+            answer = row['答案']
+            relevant_chunks_id_list = row['relevant_chunks']
+            relevant_chunks_id_list_verified_with_llm = []
+            for chunk_id in relevant_chunks_id_list:
+                # Find the chunk text
+                chunk_text = chunks_dict[chunk_id]['text']
+                relevance = check_relevance(chunk_text, question, answer)
+                if relevance['relevance']:
+                    relevant_chunks_id_list_verified_with_llm.append(chunk_id)
+            relevant_chunks_list_verified_with_llm.append(relevant_chunks_id_list_verified_with_llm)
+            
+        officialfaq_pd['relevant_chunks_verified_with_llm'] = relevant_chunks_list_verified_with_llm
+        officialfaq_pd.to_csv(f"./data/official_faq_with_relevant_chunks_relevance_by_llm_{start_index}_{end_index}.csv", index=False)
+    except Exception as e:
+        print(f"Error: {e}")
+        # save the verified relevant chunks
+        print(f"Sucessfully verified {len(relevant_chunks_list_verified_with_llm)} relevant chunks. From {start_index} to {start_index + len(relevant_chunks_list_verified_with_llm)}")
+        officialfaq_pd = officialfaq_pd.iloc[:len(relevant_chunks_list_verified_with_llm)]
+        officialfaq_pd['relevant_chunks_verified_with_llm'] = relevant_chunks_list_verified_with_llm
+        officialfaq_pd.to_csv(f"./data/official_faq_with_relevant_chunks_relevance_by_llm_{start_index}_{start_index + len(relevant_chunks_list_verified_with_llm)}.csv", index=False)
