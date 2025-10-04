@@ -151,7 +151,6 @@ if __name__ == "__main__":
     
     
     # 3. Use llm to check the relevance of the chunks
-    
     # Reshape the chunks
     chunks_dict = {chunk['metadata']['chunk_index']: chunk for chunk in chunks}
     
@@ -159,28 +158,31 @@ if __name__ == "__main__":
     officialfaq_pd['relevant_chunks'] = officialfaq_pd['relevant_chunks'].apply(ast.literal_eval)
     end_index = len(officialfaq_pd) if end_index == -1 else end_index
     officialfaq_pd = officialfaq_pd[start_index:end_index]
+    print(f"From {start_index} to {end_index}")
     
     relevant_chunks_list_verified_with_llm = []
-    try:
-        for index, row in tqdm(officialfaq_pd.iterrows(), total=len(officialfaq_pd)):
-            question = row['问题']
-            answer = row['答案']
-            relevant_chunks_id_list = row['relevant_chunks']
-            relevant_chunks_id_list_verified_with_llm = []
-            for chunk_id in relevant_chunks_id_list:
-                # Find the chunk text
-                chunk_text = chunks_dict[chunk_id]['text']
+    for index, row in tqdm(officialfaq_pd.iterrows(), total=len(officialfaq_pd)):
+        question = row['问题']
+        answer = row['答案']
+        relevant_chunks_id_list = row['relevant_chunks']
+        relevant_chunks_id_list_verified_with_llm = []
+        for chunk_id in relevant_chunks_id_list:
+            # Find the chunk text
+            chunk_text = chunks_dict[chunk_id]['text']
+            try:
                 relevance = check_relevance(chunk_text, question, answer)
                 if relevance['relevance']:
                     relevant_chunks_id_list_verified_with_llm.append(chunk_id)
-            relevant_chunks_list_verified_with_llm.append(relevant_chunks_id_list_verified_with_llm)
+            except Exception as e:
+                print(f"Error: {e}")
+        relevant_chunks_list_verified_with_llm.append(relevant_chunks_id_list_verified_with_llm)
             
-        officialfaq_pd['relevant_chunks_verified_with_llm'] = relevant_chunks_list_verified_with_llm
-        officialfaq_pd.to_csv(f"./data/official_faq_with_relevant_chunks_relevance_by_llm_{start_index}_{end_index}.csv", index=False)
-    except Exception as e:
-        print(f"Error: {e}")
-        # save the verified relevant chunks
-        print(f"Sucessfully verified {len(relevant_chunks_list_verified_with_llm)} relevant chunks. From {start_index} to {start_index + len(relevant_chunks_list_verified_with_llm)}")
-        officialfaq_pd = officialfaq_pd.iloc[:len(relevant_chunks_list_verified_with_llm)]
-        officialfaq_pd['relevant_chunks_verified_with_llm'] = relevant_chunks_list_verified_with_llm
-        officialfaq_pd.to_csv(f"./data/official_faq_with_relevant_chunks_relevance_by_llm_{start_index}_{start_index + len(relevant_chunks_list_verified_with_llm)}.csv", index=False)
+    officialfaq_pd['relevant_chunks_verified_with_llm'] = relevant_chunks_list_verified_with_llm
+    officialfaq_pd.to_csv(f"./data/official_faq_with_relevant_chunks_relevance_by_llm_{start_index}_{end_index}.csv", index=False)
+    # except Exception as e:
+    #     print(f"Error: {e}")
+    #     # save the verified relevant chunks
+    #     print(f"Sucessfully verified {len(relevant_chunks_list_verified_with_llm)} relevant chunks. From {start_index} to {start_index + len(relevant_chunks_list_verified_with_llm)}")
+    #     officialfaq_pd = officialfaq_pd.iloc[:len(relevant_chunks_list_verified_with_llm)]
+    #     officialfaq_pd['relevant_chunks_verified_with_llm'] = relevant_chunks_list_verified_with_llm
+    #     officialfaq_pd.to_csv(f"./data/official_faq_with_relevant_chunks_relevance_by_llm_{start_index}_{start_index + len(relevant_chunks_list_verified_with_llm)}.csv", index=False)

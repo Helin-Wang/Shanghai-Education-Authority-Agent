@@ -11,8 +11,8 @@ import pandas as pd
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--qapair_filepath", help="QAPair Filepath", default="../data/eval/simpleQA_v0.json")
-    parser.add_argument("--results_filepath", help="QAPair Filepath", default="./results/simpleQA_v0.json")
+    parser.add_argument("--qapair_filepath", help="QAPair Filepath", default="../data/eval/official_faq.csv")
+    parser.add_argument("--results_filepath", help="QAPair Filepath", default="./results/official_faq_v0.json")
     args = parser.parse_args()
     qapair_filepath = args.qapair_filepath
     results_filepath = args.results_filepath
@@ -49,14 +49,13 @@ if __name__ == "__main__":
             "faiss_db_path": "../data/faiss_index"
         }
         result_state = workflow_app.invoke(initial_state)
-
+        
         eval_results.append({
             "question": question,
-            "reranked_docs": ",".join([doc.metadata['doc_id'] for doc in result_state["reranked_docs"]]),
+            "reranked_docs": ",".join([doc.metadata['chunk_index'] for doc in result_state["reranked_docs"]]),
             "answer": result_state["answer"],
             "ground_truth": qapair["answer"]
         })
-        
     conn.close()
     
     # create results directory if not exists
