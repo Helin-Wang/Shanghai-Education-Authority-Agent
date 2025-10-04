@@ -19,3 +19,6 @@ class AgentState(TypedDict):
     llm: Optional[Any]  # Store LLM instance
     years: Optional[List[str]]  # Store years
     categories: Optional[List[str]]  # Store categories
+    
+    # Clarification-related fields
+    needs_clarification: Optional[bool]  # Whether the query needs clarification
