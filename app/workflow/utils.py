@@ -332,3 +332,52 @@ def extract_category(query: str, llm: ChatOpenAI) -> list[str]:
         result = extract_category_using_LLM(query, llm)
     return result
 
+def generate_hypothetical_document(query: str, llm: ChatOpenAI) -> str:
+    """
+    Generate a hypothetical document that would contain the answer to the query using HyDE approach.
+    
+    Args:
+        query: The original user query
+        llm: ChatOpenAI instance for generating the hypothetical document
+        
+    Returns:
+        A hypothetical document string that would contain the answer to the query
+    """
+    if llm is None:
+        return query  # Fallback to original query if no LLM available
+    
+    HYDE_SYSTEM_PROMPT = """You are an assistant for a SHANGHAI EDUCATION AUTHORITY information service.
+
+TASK: Generate a hypothetical document that would contain the answer to the user's question.
+
+Rules:
+1) Write a comprehensive document that would answer the user's question about Shanghai education policies, exams, or procedures.
+2) Include relevant details, specific information, and context that would be found in official documents.
+3) Use formal, official language appropriate for government documents.
+4) Include specific dates, regulations, procedures, and requirements when relevant.
+5) Write in Chinese as this is for Shanghai Education Authority.
+6) Make the document detailed and informative, as if it were an official FAQ or policy document.
+7) Do not include disclaimers or meta-commentary about the document being hypothetical.
+
+The document should be written as if it were an official Shanghai Education Authority document that directly answers the user's question."""
+    
+    HYDE_USER_PROMPT = f"""User question: {query}
+
+Generate a hypothetical document that would contain the answer to this question. Write it as an official Shanghai Education Authority document."""
+    
+    try:
+        response = llm.invoke([
+            {"role": "system", "content": HYDE_SYSTEM_PROMPT},
+            {"role": "user", "content": HYDE_USER_PROMPT}
+        ], temperature=0.3)  # Lower temperature for more consistent, factual content
+        
+        if hasattr(response, 'content') and response.content:
+            return response.content.strip()
+        else:
+            print("No content in HyDE LLM response, falling back to original query")
+            return query
+            
+    except Exception as e:
+        print(f"Error generating hypothetical document: {e}")
+        return query  # Fallback to original query
+
