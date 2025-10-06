@@ -114,7 +114,9 @@ class UserSimulationAgent:
     def generate_user_input(self, 
                           conversation_history: List[Dict], 
                           ground_truth: str,
-                          iteration: int) -> str:
+                          iteration: int,
+                          subsection: str = "",
+                          section: str = "") -> str:
         """
         Generate the next user input based on conversation history and ground truth
         
@@ -122,6 +124,8 @@ class UserSimulationAgent:
             conversation_history: List of conversation turns
             ground_truth: Expected answer
             iteration: Current iteration number
+            subsection: 部分 information
+            section: 考试类型 information
             
         Returns:
             Next user input
@@ -136,9 +140,9 @@ class UserSimulationAgent:
         follow_up_prompt = f"""
         你是一个用户，正在与上海教育考试院的智能助手进行多轮对话。
         
-        你的原始问题是: {conversation_history[0].get("query", "")}
+        你的原始问题是: 【{section}-{subsection}】{conversation_history[0].get("query", "")}
         你期望的答案是: {ground_truth}
-        
+       
         对话历史:
         """
         
@@ -166,13 +170,15 @@ class UserSimulationAgent:
             # Fallback: ask for clarification
             return "请提供更详细的信息"
     
-    def simulate_conversation(self, question: str, ground_truth: str) -> ConversationMetrics:
+    def simulate_conversation(self, question: str, ground_truth: str, subsection: str = "", section: str = "") -> ConversationMetrics:
         """
         Simulate a complete multi-round conversation
         
         Args:
             question: Initial question
             ground_truth: Expected answer
+            subsection: 部分 information
+            section: 考试类型 information
             
         Returns:
             ConversationMetrics object with results
@@ -189,7 +195,7 @@ class UserSimulationAgent:
                 if iteration == 0:
                     user_input = question
                 else:
-                    user_input = self.generate_user_input(conversation_history, ground_truth, iteration)
+                    user_input = self.generate_user_input(conversation_history, ground_truth, iteration, subsection, section)
                 
                 # Run the workflow
                 result = run_langgraph_workflow(user_input, conversation_state)
@@ -293,7 +299,9 @@ def evaluate_multi_round_conversations(qapair_filepath: str,
         for index, row in df.iterrows():
             qapair = {
                 "question": row['问题'],
-                'answer': row['答案']
+                'answer': row['答案'],
+                'subsection': row.get('部分', ''),
+                'section': row.get('考试类型', '')
             }
             qapairs.append(qapair)
     
@@ -312,11 +320,13 @@ def evaluate_multi_round_conversations(qapair_filepath: str,
     for qapair in tqdm(qapairs):
         question = qapair["question"]
         ground_truth = qapair["answer"]
+        subsection = qapair.get("部分", "")
+        section = qapair.get("考试类型", "")
         
         # print(f"\nEvaluating: {question[:50]}...")
         
         # Simulate conversation
-        metrics = agent.simulate_conversation(question, ground_truth)
+        metrics = agent.simulate_conversation(question, ground_truth, subsection, section)
         
         # Convert to serializable format
         result = {
@@ -398,11 +408,17 @@ def interactive_terminal_mode():
             if not ground_truth:
                 ground_truth = "No ground truth provided"
             
+            # Get 部分 and 考试类型 (optional)
+            print("\nEnter 部分 (section) - press Enter to skip:")
+            subsection = input("部分: ").strip()
+            print("\nEnter 考试类型 (exam type) - press Enter to skip:")
+            section = input("考试类型: ").strip()
+            
             print(f"\nStarting conversation with question: {question}")
             print("-" * 40)
             
             # Simulate the conversation
-            metrics = agent.simulate_conversation(question, ground_truth)
+            metrics = agent.simulate_conversation(question, ground_truth, subsection, section)
             
             # Display results
             print(f"\n📊 CONVERSATION RESULTS:")
