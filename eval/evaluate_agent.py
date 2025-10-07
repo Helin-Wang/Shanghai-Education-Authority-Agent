@@ -23,6 +23,7 @@ from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 from langchain_openai import ChatOpenAI
 import os
+from tqdm import tqdm
 
 
 class AgentEvaluator:
@@ -54,6 +55,22 @@ class AgentEvaluator:
         
         # Initialize LLM client with SiliconFlow API
         self._initialize_llm()
+    
+    @staticmethod
+    def _normalize_text(text: Any) -> str:
+        """Convert arbitrary input to a safe string for downstream processing."""
+        if text is None:
+            return ''
+        # Handle pandas/numpy NaN representations explicitly
+        try:
+            if pd.isna(text):
+                return ''
+        except (TypeError, ValueError):
+            # pd.isna raises for some iterables; fall back to string conversion
+            pass
+        if isinstance(text, str):
+            return text
+        return str(text)
     
     def _initialize_llm(self):
         """Initialize LLM client with SiliconFlow API"""
@@ -185,6 +202,9 @@ class AgentEvaluator:
         Returns:
             Dictionary with various quality metrics
         """
+        agent_answer = self._normalize_text(agent_answer)
+        ground_truth = self._normalize_text(ground_truth)
+        
         # Keyword overlap using jieba tokenization
         keyword_metrics = self._calculate_keyword_overlap_jieba(agent_answer, ground_truth)
         
@@ -516,7 +536,7 @@ if __name__ == "__main__":
         with open(args.single_results, 'r', encoding='utf-8') as f:
             single_results = json.load(f)
         
-        for result in single_results:
+        for result in tqdm(single_results, desc="Evaluating single results"):
             evaluation = evaluator.evaluate_single_result(result)
             single_evaluations.append(evaluation)
     
@@ -525,7 +545,7 @@ if __name__ == "__main__":
         with open(args.multi_round_results, 'r', encoding='utf-8') as f:
             multi_round_results = json.load(f)
         
-        for result in multi_round_results:
+        for result in tqdm(multi_round_results, desc="Evaluating multi-round results"):
             evaluation = evaluator.evaluate_multi_round_result(result)
             multi_round_evaluations.append(evaluation)
     
