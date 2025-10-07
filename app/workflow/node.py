@@ -7,7 +7,7 @@ from models.BgeReranker import BgeReranker
 from models.HybridRetriever import HybridRetriever
 import os
 from workflow.state import AgentState
-from workflow.utils import extract_year, extract_category
+from workflow.utils import extract_year, extract_category, generate_hypothetical_document
 from langchain_core.messages import HumanMessage, AIMessage
 import json
 from langchain_core.pydantic_v1 import BaseModel, Field
@@ -322,9 +322,22 @@ def retrieve_node(state: AgentState) -> AgentState:
     categories = extract_category(query, state["llm"])
     state["categories"] = categories
     
-    # Retrieve documents using hybrid approach
+    # Retrieve documents using hybrid approach (raw query first)
     retriever = state["retriever"]
-    docs = retriever.retrieve(query, alpha=0.1, years=years, categories=categories)  # 0.1 for BM25, 0.9 for FAISS
+
+    llm = state.get("llm")
+    if llm is not None:
+        try:
+            hyde_query = generate_hypothetical_document(query, llm)
+            print(f"Generated HyDE query: {hyde_query[:200]}...")
+            docs, scores = retriever.retrieve(hyde_query, years=years, categories=categories, alpha=0.1, return_scores=True)
+        except Exception as e:
+            print(f"HyDE retrieval failed: {e}")
+            docs, scores = retriever.retrieve(query, years=years, categories=categories, alpha=0.1, return_scores=True)
+    else:
+        print("No LLM available for HyDE, keeping original results")
+        docs, scores = retriever.retrieve(query, years=years, categories=categories, alpha=0.1, return_scores=True)
+
     state["docs"] = docs
     
     return state

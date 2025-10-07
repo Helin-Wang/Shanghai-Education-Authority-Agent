@@ -1,6 +1,6 @@
 import jieba
 import numpy as np
-from typing import List, Tuple, Dict, Any
+from typing import List, Tuple, Dict, Any, Union
 from langchain.schema import Document
 from langchain_community.retrievers import BM25Retriever
 from langchain_community.vectorstores import FAISS, Chroma
@@ -77,16 +77,19 @@ class HybridRetriever:
         self.bm25_retriever = BM25Retriever.from_documents(docs)
         self.bm25_retriever.k = self.k
     
-    def retrieve(self, query: str, alpha: float = 0.5, years: List[str] = None, categories: List[str] = None) -> List[Document]:
+    def retrieve(self, query: str, alpha: float = 0.5, years: List[str] = None, categories: List[str] = None, return_scores: bool = False) -> Union[List[Document], Tuple[List[Document], List[float]]]:
         """
         Retrieve documents using hybrid approach
         
         Args:
             query: Search query
             alpha: Weight for BM25 (1-alpha is weight for FAISS)
+            years: Optional list of years to filter by
+            categories: Optional list of categories to filter by
+            return_scores: If True, return both documents and scores
             
         Returns:
-            List of retrieved documents
+            List of retrieved documents, or tuple of (documents, scores) if return_scores=True
         """
         def filter_docs(docs, years=None, categories=None):
             def valid(doc):
@@ -104,60 +107,37 @@ class HybridRetriever:
         bm25_docs_with_scores = filter_docs(bm25_docs_with_scores, years, categories)
         bm25_docs = [doc for doc, score in bm25_docs_with_scores]
         bm25_scores = [score for doc, score in bm25_docs_with_scores]
-        
-        # FAISS retrieval
+       # print(f"BM25 scores: {bm25_scores}")
+        # FAISS retrieval: smaller scores are better
         faiss_docs_with_scores = self.faiss_db.similarity_search_with_score(query, k=self.k)
         # filter by years and categories
         faiss_docs_with_scores = filter_docs(faiss_docs_with_scores, years, categories)
         faiss_docs = [doc for doc, score in faiss_docs_with_scores]
         faiss_scores = [score for doc, score in faiss_docs_with_scores]
+       # print(f"FAISS scores: {faiss_scores}")
         
         # Normalize scores
         bm25_scores_norm = self._normalize_scores(bm25_scores)
         faiss_scores_norm = self._normalize_scores(faiss_scores)
         
-        # Combine results
-        combined_results = self._combine_results(
-            bm25_docs, bm25_scores_norm,
-            faiss_docs, faiss_scores_norm,
-            alpha
-        )
-        
-        return combined_results[:self.k]
-    
-    def retrieve_with_scores(self, query: str, alpha: float = 0.5) -> List[Tuple[Document, float]]:
-        """
-        Retrieve documents with scores using hybrid approach
-        
-        Args:
-            query: Search query
-            alpha: Weight for BM25 (1-alpha is weight for FAISS)
-            
-        Returns:
-            List of (Document, score) tuples
-        """
-        # BM25 retrieval
-        bm25_query = " ".join(jieba.cut(query))  # Chinese tokenization
-        bm25_docs = self.bm25_retriever.invoke(bm25_query)
-        bm25_scores = self.bm25_retriever.vectorizer.get_scores(bm25_query)
-        
-        # FAISS retrieval
-        faiss_docs_with_scores = self.faiss_db.similarity_search_with_score(query, k=self.k)
-        faiss_docs = [doc for doc, score in faiss_docs_with_scores]
-        faiss_scores = [score for doc, score in faiss_docs_with_scores]
-        
-        # Normalize scores
-        bm25_scores_norm = self._normalize_scores(bm25_scores)
-        faiss_scores_norm = self._normalize_scores(faiss_scores)
-        
-        # Combine results
-        combined_results = self._combine_results_with_scores(
-            bm25_docs, bm25_scores_norm,
-            faiss_docs, faiss_scores_norm,
-            alpha
-        )
-        
-        return combined_results[:self.k]
+        if return_scores:
+            # Get scores for the combined results
+            combined_results_with_scores = self._combine_results_with_scores(
+                bm25_docs, bm25_scores_norm,
+                faiss_docs, faiss_scores_norm,
+                alpha
+            )
+            docs = [doc for doc, score in combined_results_with_scores[:self.k]]
+            scores = [score for doc, score in combined_results_with_scores[:self.k]]
+            return docs, scores
+        else:
+            # Combine results
+            combined_results = self._combine_results(
+                bm25_docs, bm25_scores_norm,
+                faiss_docs, faiss_scores_norm,
+                alpha
+            )
+            return combined_results[:self.k]
     
     def _normalize_scores(self, scores: np.ndarray) -> np.ndarray:
         """Normalize scores to [0, 1] range"""
@@ -190,7 +170,7 @@ class HybridRetriever:
             doc_scores[doc_key] = doc_scores.get(doc_key, 0) + (1 - alpha) * faiss_scores[i]
         
         # Sort by combined score
-        sorted_docs = sorted(doc_scores.items(), key=lambda x: x[1], reverse=True)
+        sorted_docs = sorted(doc_scores.items(), key=lambda x: x[1])
         
         # Extract documents
         result_docs = []
@@ -220,7 +200,7 @@ class HybridRetriever:
             doc_scores[doc_key] = doc_scores.get(doc_key, 0) + (1 - alpha) * faiss_scores[i]
         
         # Sort by combined score
-        sorted_docs = sorted(doc_scores.items(), key=lambda x: x[1], reverse=True)
+        sorted_docs = sorted(doc_scores.items(), key=lambda x: x[1])
         
         # Extract documents with scores
         result_docs = []
@@ -229,7 +209,6 @@ class HybridRetriever:
             doc = self._find_doc_by_key(doc_key, bm25_docs + faiss_docs)
             if doc is not None:
                 result_docs.append((doc, score))
-        
         return result_docs
     
     def _get_doc_key(self, doc: Document) -> str:
