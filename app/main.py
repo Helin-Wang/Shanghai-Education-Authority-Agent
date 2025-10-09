@@ -40,7 +40,7 @@ def continue_conversation(query: str, ground_truth: str, last_answer: str, llm: 
         return False
         
 
-def run_langgraph_workflow(query: str, conversation_state: dict = None):
+def run_langgraph_workflow(query: str, conversation_state: dict = None, use_hyde: bool = False):
     """Run the LangGraph workflow for a given query with optional conversation state"""
     
     # Initialize or use existing state
@@ -55,12 +55,14 @@ def run_langgraph_workflow(query: str, conversation_state: dict = None):
             "llm": None,
             "conn": conn,
             "faiss_db_path": "../data/faiss_index",
-            "needs_clarification": None
+            "needs_clarification": None,
+            "use_hyde": use_hyde
         }
     else:
         # Use existing conversation state
         initial_state = conversation_state.copy()
         initial_state["query"] = query
+        initial_state["use_hyde"] = use_hyde
         # Add new user message to history
         initial_state["history"].append(HumanMessage(content=query))
     
@@ -121,7 +123,8 @@ def run_multi_round_conversation():
                 "llm": result.get("llm"),
                 "conn": result.get("conn"),
                 "faiss_db_path": result.get("faiss_db_path"),
-                "needs_clarification": result.get("needs_clarification")
+                "needs_clarification": result.get("needs_clarification"),
+                "use_hyde": result.get("use_hyde", False)
             }
             
             # Handle the result
@@ -146,14 +149,16 @@ def run_multi_round_conversation():
             print(f"\n❌ 处理过程中出现错误: {str(e)}")
             print("请重试或联系技术支持。")
 
-def run_single_query(query: str):
+def run_single_query(query: str, use_hyde: bool = False):
     """Run a single query and display the result"""
     
     print(f"运行查询: {query}")
+    if use_hyde:
+        print("🔍 HyDE (Hypothetical Document Embeddings) enabled")
     print("=" * 50)
     
     # Run the workflow
-    result = run_langgraph_workflow(query)
+    result = run_langgraph_workflow(query, use_hyde=use_hyde)
     
     # Display results
     if result.get("needs_clarification", False):
@@ -176,7 +181,10 @@ if __name__ == "__main__":
     if len(sys.argv) > 1:
         # Single query mode
         query = sys.argv[1]
-        run_single_query(query)
+        use_hyde = "--hyde" in sys.argv
+        if use_hyde:
+            print("🔍 HyDE (Hypothetical Document Embeddings) enabled")
+        run_single_query(query, use_hyde)
     else:
         # Interactive conversation mode
         run_multi_round_conversation()

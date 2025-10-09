@@ -180,7 +180,7 @@ class UserSimulationAgent:
             # Fallback: ask for clarification
             return "请提供更详细的信息"
     
-    def simulate_conversation(self, question: str, ground_truth: str, subsection: str = "", section: str = "") -> ConversationMetrics:
+    def simulate_conversation(self, question: str, ground_truth: str, subsection: str = "", section: str = "", use_hyde: bool = False) -> ConversationMetrics:
         """
         Simulate a complete multi-round conversation
         
@@ -197,6 +197,7 @@ class UserSimulationAgent:
         conversation_history = []
         conversation_state = None
         iteration = 0
+        use_hyde = use_hyde
         stop_reason = "error"
         
         try:
@@ -208,7 +209,7 @@ class UserSimulationAgent:
                     user_input = self.generate_user_input(conversation_history, ground_truth, iteration, subsection, section)
                 
                 # Run the workflow
-                result = run_langgraph_workflow(user_input, conversation_state)
+                result = run_langgraph_workflow(user_input, conversation_state, use_hyde=use_hyde)
                 
                 # Extract retrieved document IDs
                 retrieved_docs_ids = []
@@ -241,7 +242,8 @@ class UserSimulationAgent:
                     "llm": result.get("llm"),
                     "conn": result.get("conn"),
                     "faiss_db_path": result.get("faiss_db_path"),
-                    "needs_clarification": result.get("needs_clarification")
+                    "needs_clarification": result.get("needs_clarification"),
+                    "use_hyde": result.get("use_hyde", use_hyde)
                 }
                 
                 iteration += 1
@@ -286,7 +288,8 @@ def evaluate_multi_round_conversations(qapair_filepath: str,
                                      results_filepath: str,
                                      max_iterations: int = 5,
                                      max_time: float = 300.0,
-                                     sample_size: Optional[int] = None):
+                                     sample_size: Optional[int] = None,
+                                     use_hyde: bool = False):
     """
     Evaluate multi-round conversations using user simulation
     
@@ -336,7 +339,7 @@ def evaluate_multi_round_conversations(qapair_filepath: str,
         # print(f"\nEvaluating: {question[:50]}...")
         
         # Simulate conversation
-        metrics = agent.simulate_conversation(question, ground_truth, subsection, section)
+        metrics = agent.simulate_conversation(question, ground_truth, subsection, section, use_hyde=use_hyde)
         
         # Convert to serializable format
         result = {
@@ -423,12 +426,22 @@ def interactive_terminal_mode():
             subsection = input("部分: ").strip()
             print("\nEnter 考试类型 (exam type) - press Enter to skip:")
             section = input("考试类型: ").strip()
+
+            # Get use_hyde (optional)
+            print("\nEnter use_hyde (true/false) - press Enter to skip:")
+            use_hyde = input("use_hyde: ").strip().lower()
+            if use_hyde == "true":
+                use_hyde = True
+            elif use_hyde == "false":
+                use_hyde = False
+            else:
+                use_hyde = False
             
             print(f"\nStarting conversation with question: {question}")
             print("-" * 40)
             
             # Simulate the conversation
-            metrics = agent.simulate_conversation(question, ground_truth, subsection, section)
+            metrics = agent.simulate_conversation(question, ground_truth, subsection, section, use_hyde=use_hyde)
             
             # Display results
             print(f"\n📊 CONVERSATION RESULTS:")
@@ -507,6 +520,11 @@ if __name__ == "__main__":
     parser.add_argument("--interactive", 
                        action="store_true", 
                        help="Run in interactive terminal mode")
+    parser.add_argument("--hyde", 
+                       type=bool,
+                       default=False,
+                       action="store_true", 
+                       help="Use HyDE")
     
     args = parser.parse_args()
     
@@ -518,5 +536,6 @@ if __name__ == "__main__":
             results_filepath=args.results_filepath,
             max_iterations=args.max_iterations,
             max_time=args.max_time,
-            sample_size=args.sample_size
+            sample_size=args.sample_size,
+            use_hyde=args.hyde
         )

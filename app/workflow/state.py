@@ -22,3 +22,6 @@ class AgentState(TypedDict):
     
     # Clarification-related fields
     needs_clarification: Optional[bool]  # Whether the query needs clarification
+    
+    # HyDE (Hypothetical Document Embeddings) switch
+    use_hyde: Optional[bool]  # Whether to use HyDE for retrieval enhancement

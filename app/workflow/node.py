@@ -325,14 +325,18 @@ def retrieve_node(state: AgentState) -> AgentState:
     # Retrieve documents using hybrid approach (raw query first)
     retriever = state["retriever"]
 
+    # Check if HyDE should be used
+    use_hyde = state.get("use_hyde", False)  # Default to False if not specified
     llm = state.get("llm")
-    if llm is not None:
+    
+    if use_hyde and llm is not None:
         try:
             hyde_query = generate_hypothetical_document(query, llm)
             print(f"Generated HyDE query: {hyde_query[:200]}...")
             docs, scores = retriever.retrieve(hyde_query, years=years, categories=categories, alpha=0.1, return_scores=True)
         except Exception as e:
             print(f"HyDE retrieval failed: {e}")
+            print("Falling back to original query")
             docs, scores = retriever.retrieve(query, years=years, categories=categories, alpha=0.1, return_scores=True)
     else:
         print("No LLM available for HyDE, keeping original results")
