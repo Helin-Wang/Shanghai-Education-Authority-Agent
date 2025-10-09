@@ -9,12 +9,18 @@ from langchain_core.messages import HumanMessage, AIMessage
 import pandas as pd
 from tqdm import tqdm
 from langchain_openai import ChatOpenAI
+from pydantic import BaseModel, Field
 
 # Add parent directory to path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.append(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'app'))
 
 from app.main import run_langgraph_workflow
+
+class SatisfactionEvaluation(BaseModel):
+    """Schema for satisfaction evaluation response"""
+    is_satisfied: bool = Field(description="Whether the user is satisfied with the answer")
+    reason: str = Field(description="Brief reason for the satisfaction decision")
 
 @dataclass
 class ConversationMetrics:
@@ -52,6 +58,7 @@ class UserSimulationAgent:
             streaming=True
         )
         self.llm = llm
+        self.satisfaction_llm = llm.with_structured_output(SatisfactionEvaluation)
     
     def should_continue_conversation(self, 
                                    conversation_history: List[Dict], 
@@ -93,23 +100,26 @@ class UserSimulationAgent:
             
             请判断这个回答是否满足你的需求。考虑以下因素：
             1. 回答是否准确回答了你的问题
-            2. 回答是否提供了足够的信息
+            2. 回答是否提供了期望答案中的关键信息点，注意不需要完全一致，只要包含关键信息点即可
             3. 回答是否清晰易懂
+            4. 如果助手没有直接回答你的问题，而是继续向你提问或要求你提供更多信息，则视为不满意
             
-            请只回答 "满意" 或 "不满意"，不要提供其他内容。
+            请按照以下格式返回你的评估结果：
+            - is_satisfied: 布尔值，true表示满意，false表示不满意
+            - reason: 简要说明你的判断理由（不超过50字）
+            
+            请严格按照上述格式返回结构化数据。
             """
             
             try:
-                response = self.llm.invoke(satisfaction_prompt)
-                satisfaction = response.content.strip()
+                response = self.satisfaction_llm.invoke(satisfaction_prompt)
                 
-                if "满意" in satisfaction:
-                    return False, "satisfied"
+                if not response.is_satisfied:
+                    return True, "continue"
             except Exception as e:
                 print(f"Error evaluating satisfaction: {e}")
                 # If evaluation fails, continue conversation
-        
-        return True, "continue"
+        return False, "satisfied"
     
     def generate_user_input(self, 
                           conversation_history: List[Dict], 

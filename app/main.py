@@ -2,11 +2,43 @@ import os
 from workflow.graph import workflow_app
 from langchain_core.messages import HumanMessage, AIMessage
 import sqlite3
+from typing import Any
 
 # Initialize API configuration
 api_key_r1 = 'ebe4d4b6-00ae-4ea7-9890-9356d6a29570'
 os.environ["OPENAI_API_BASE"] = 'https://ark.cn-beijing.volces.com/api/v3'
 os.environ["OPENAI_API_KEY"] = api_key_r1
+
+def continue_conversation(query: str, ground_truth: str, last_answer: str, llm: Any):
+    # Use LLM to evaluate if the answer is satisfactory
+        satisfaction_prompt = f"""
+        你是一个用户，正在与上海教育考试院的智能助手对话。
+            
+        你的原始问题是: {query}
+        你期望的答案是: {ground_truth}
+            
+        助手的最新回答是: {last_answer}
+            
+        请判断这个回答是否满足你的需求。考虑以下因素：
+        1. 回答是否准确回答了你的问题
+        2. 回答是否提供了期望答案中的关键信息点，注意不需要完全一致，只要包含关键信息点即可
+        3. 回答是否清晰易懂
+        4. 如果助手没有直接回答你的问题，而是继续向你提问或要求你提供更多信息，则视为“不满意”。
+            
+        请只回答 "满意" 或 "不满意"，不要提供其他内容。
+        """
+    
+        try:
+            response = llm.invoke(satisfaction_prompt)
+            satisfaction = response.content.strip()
+            print(satisfaction)
+                
+            if "不满意" in satisfaction:
+                return True
+        except Exception as e:
+            print(f"Error evaluating satisfaction: {e}")
+        return False
+        
 
 def run_langgraph_workflow(query: str, conversation_state: dict = None):
     """Run the LangGraph workflow for a given query with optional conversation state"""
@@ -54,10 +86,17 @@ def run_multi_round_conversation():
     conversation_state = None
     conversation_round = 0
     
+    # Input query and ground truth
+    query = input("请输入您的问题: ").strip()
+    ground_truth = input("请输入您期望的答案: ").strip()
+    
+    
     while True:
         try:
-            # Get user input
-            user_input = input(f"\n[第{conversation_round + 1}轮] 您的问题: ").strip()
+            if conversation_round == 0:
+                user_input = query
+            else:
+                user_input = input(f"\n[第{conversation_round + 1}轮] 您的问题: ").strip()
             
             # Check for exit commands
             if user_input.lower() in ['quit', 'exit', '退出', 'q']:
@@ -88,7 +127,6 @@ def run_multi_round_conversation():
             # Handle the result
             if result.get("needs_clarification", False):
                 print(f"🤔 需要澄清: {result.get('answer', '')}")
-                print("请提供更多详细信息，以便我能更好地帮助您。")
             else:
                 print(f"✅ 回答: {result.get('answer', '')}")
                 
@@ -97,6 +135,9 @@ def run_multi_round_conversation():
                     print(f"\n📚 参考了 {len(result['docs'])} 个相关文档")
             
             conversation_round += 1
+            if not continue_conversation(query, ground_truth, result.get("answer", ""), result.get("llm")):
+                print("感谢您的使用！再见！")
+                break
             
         except KeyboardInterrupt:
             print("\n\n程序被用户中断。")
