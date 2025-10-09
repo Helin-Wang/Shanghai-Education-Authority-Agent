@@ -520,9 +520,7 @@ if __name__ == "__main__":
     parser.add_argument("--interactive", 
                        action="store_true", 
                        help="Run in interactive terminal mode")
-    parser.add_argument("--hyde", 
-                       type=bool,
-                       default=False,
+    parser.add_argument("--hyde",
                        action="store_true", 
                        help="Use HyDE")
     
